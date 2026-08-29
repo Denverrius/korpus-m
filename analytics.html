@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Аналитика & Выручка • KorpusM • Мебельный цех (Мариуполь)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,700;1,600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --chocolate-bg: #0e0b0a;
+            --chocolate-card: rgba(22, 17, 15, 0.94);
+            --chocolate-border: rgba(198, 156, 58, 0.35);
+            --caramel-gold: #e5c158;
+            --caramel-gold-glow: rgba(229, 193, 88, 0.35);
+            --text-light: #f8f4eb;
+            --text-muted: #b8ac9a;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--chocolate-bg);
+            color: var(--text-light);
+            line-height: 1.6;
+            min-height: 100vh;
+            padding: 24px 4%;
+            position: relative;
+        }
+
+        .bg-layer {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: radial-gradient(circle at 85% 15%, rgba(229, 193, 88, 0.08) 0%, transparent 55%),
+                        radial-gradient(circle at 10% 90%, rgba(139, 90, 43, 0.1) 0%, transparent 60%);
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .analytics-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+            padding-bottom: 24px;
+            border-bottom: 1px solid var(--chocolate-border);
+            margin-bottom: 24px;
+        }
+
+        .brand-block { display: flex; align-items: center; gap: 16px; }
+        .brand-logo {
+            width: 52px; height: 52px; border-radius: 50%;
+            border: 2px solid var(--caramel-gold); object-fit: cover;
+            box-shadow: 0 0 15px var(--caramel-gold-glow);
+        }
+        .brand-title { font-family: 'Cormorant Garamond', serif; font-size: 28px; color: var(--caramel-gold); line-height: 1.2; }
+        .brand-subtitle { font-size: 13px; color: var(--text-muted); }
+
+        .header-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+        .btn-link {
+            padding: 10px 20px; border-radius: 50px; font-size: 13px; font-weight: 600;
+            text-decoration: none; background: rgba(255, 255, 255, 0.05); color: var(--text-light);
+            border: 1px solid var(--chocolate-border); transition: 0.3s; cursor: pointer;
+            display: inline-flex; align-items: center; gap: 8px;
+        }
+        .btn-link:hover {
+            background: rgba(229, 193, 88, 0.15); color: var(--caramel-gold); transform: translateY(-2px);
+        }
+
+        .active-filter-bar {
+            display: none; background: rgba(229, 193, 88, 0.15); border: 1px solid var(--caramel-gold);
+            border-radius: 12px; padding: 12px 20px; margin-bottom: 24px;
+            justify-content: space-between; align-items: center;
+        }
+        .active-filter-bar strong { color: var(--caramel-gold); }
+        .btn-reset-filter {
+            background: var(--caramel-gold); color: #000; border: none; padding: 6px 14px;
+            border-radius: 20px; font-size: 12px; font-weight: 700; cursor: pointer; transition: 0.2s;
+        }
+
+        .kpi-grid {
+            display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 28px;
+        }
+        .kpi-card {
+            background: var(--chocolate-card); border: 1px solid var(--chocolate-border);
+            border-radius: 18px; padding: 20px; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(12px); transition: 0.3s ease;
+        }
+        .kpi-card:hover {
+            border-color: var(--caramel-gold); transform: translateY(-3px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7), 0 0 15px var(--caramel-gold-glow);
+        }
+        .kpi-label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; font-weight: 600; }
+        .kpi-value { font-family: 'Cormorant Garamond', serif; font-size: 32px; font-weight: 700; color: var(--caramel-gold); line-height: 1.1; margin-bottom: 6px; }
+        .kpi-subtext { font-size: 12px; color: var(--text-muted); }
+
+        .analytics-main-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 24px;
+        }
+        .dashboard-panel {
+            background: var(--chocolate-card); border: 1px solid var(--chocolate-border);
+            border-radius: 22px; padding: 26px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(12px);
+        }
+        .panel-header {
+            display: flex; justify-content: space-between; align-items: baseline;
+            border-bottom: 1px solid var(--chocolate-border); padding-bottom: 14px; margin-bottom: 20px;
+        }
+        .panel-title { font-family: 'Cormorant Garamond', serif; font-size: 24px; color: var(--caramel-gold); font-weight: 700; }
+        .panel-hint { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+
+        .bar-item { margin-bottom: 16px; cursor: pointer; padding: 8px 12px; border-radius: 12px; transition: 0.25s; }
+        .bar-item:hover { background: rgba(229, 193, 88, 0.08); }
+        .bar-item.active { background: rgba(229, 193, 88, 0.15); border: 1px solid var(--caramel-gold); }
+        .bar-item-header { display: flex; justify-content: space-between; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+        .bar-name { color: #fff; }
+        .bar-metrics { color: var(--caramel-gold); font-family: 'Cormorant Garamond', serif; font-size: 16px; font-weight: 700; }
+        .bar-track { width: 100%; height: 10px; background: rgba(255, 255, 255, 0.06); border-radius: 10px; overflow: hidden; }
+        .bar-fill { height: 100%; border-radius: 10px; background: linear-gradient(90deg, #e5c158, #b88f26); transition: width 0.6s ease; }
+
+        .heatmap-table { width: 100%; border-collapse: collapse; text-align: center; font-size: 11px; }
+        .heatmap-table th { color: var(--text-muted); font-weight: 600; padding: 8px 4px; font-size: 10px; }
+        .heatmap-table td { padding: 4px; }
+        .heat-cell {
+            height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center;
+            font-size: 11px; font-weight: 600; transition: 0.2s; cursor: pointer;
+        }
+        .heat-cell:hover { transform: scale(1.15); box-shadow: 0 0 10px rgba(229, 193, 88, 0.6); z-index: 10; }
+        .heat-level-0 { background: rgba(255, 255, 255, 0.04); color: transparent; }
+        .heat-level-1 { background: rgba(180, 83, 9, 0.4); color: #fde68a; }
+        .heat-level-2 { background: rgba(217, 119, 6, 0.7); color: #fff; }
+        .heat-level-3 { background: rgba(245, 158, 11, 0.95); color: #000; font-weight: 700; box-shadow: 0 0 8px rgba(245, 158, 11, 0.4); }
+
+        .funnel-container { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+        .funnel-step {
+            display: flex; align-items: center; background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 12px 18px; transition: 0.25s;
+        }
+        .funnel-step:hover { background: rgba(229, 193, 88, 0.08); border-color: var(--chocolate-border); }
+        .funnel-name { width: 140px; font-size: 13px; font-weight: 600; }
+        .funnel-bar-wrap { flex: 1; margin: 0 16px; }
+        .funnel-count { font-size: 14px; font-weight: 700; color: var(--caramel-gold); width: 70px; text-align: right; }
+
+        @media (max-width: 1200px) {
+            .kpi-grid { grid-template-columns: repeat(3, 1fr); }
+            .analytics-main-grid { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 768px) {
+            .kpi-grid { grid-template-columns: 1fr 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-layer"></div>
+
+    <header class="analytics-header">
+        <div class="brand-block">
+            <img src="assets/restaurant/crisp_logo.png" class="brand-logo" alt="Логотип">
+            <div>
+                <h1 class="brand-title">KorpusM • Аналитика & Выручка</h1>
+                <p class="brand-subtitle">Интерактивный дашборд эффективности онлайн-броней и форматов</p>
+            </div>
+        </div>
+
+        <div class="header-actions">
+            <a href="/crm" class="btn-link">
+                📋 Таблица заявок CRM
+            </a>
+            <a href="/" class="btn-link">
+                🌐 На сайт ресторана
+            </a>
+            <button onclick="loadAnalytics()" class="btn-link">
+                🔄 Обновить
+            </button>
+        </div>
+    </header>
+
+    <div class="active-filter-bar" id="filterBanner">
+        <span>Активный срез: <strong id="filterName">Все данные</strong></span>
+        <button class="btn-reset-filter" onclick="clearFilter()">✕ Сбросить фильтр</button>
+    </div>
+
+    <section class="kpi-grid">
+        <div class="kpi-card">
+            <div class="kpi-label">Всего заявок</div>
+            <div class="kpi-value" id="kpiTotalOrders">212</div>
+            <div class="kpi-subtext">онлайн & банкеты</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">Подтверждённые / Оплачено</div>
+            <div class="kpi-value" id="kpiPaidOrders">113</div>
+            <div class="kpi-subtext" id="kpiPaidSub">закрытые брони</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">Конверсия в оплату</div>
+            <div class="kpi-value" id="kpiConversion">53%</div>
+            <div class="kpi-subtext">заявка → бронь</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">Прогнозируемая выручка</div>
+            <div class="kpi-value" id="kpiRevenue">5 405 000 ₽</div>
+            <div class="kpi-subtext">без учета отказов</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">Средний чек</div>
+            <div class="kpi-value" id="kpiAverageCheck">27 718 ₽</div>
+            <div class="kpi-subtext">на одно событие</div>
+        </div>
+    </section>
+
+    <section class="analytics-main-grid">
+
+        <div class="dashboard-panel">
+            <div class="panel-header">
+                <h3 class="panel-title">1. Рейтинг форматов & услуг</h3>
+                <span class="panel-hint">Кликните для фильтрации</span>
+            </div>
+            <div id="typesContainer"></div>
+        </div>
+
+        <div class="dashboard-panel">
+            <div class="panel-header">
+                <h3 class="panel-title">2. Источники трафика</h3>
+                <span class="panel-hint">Кликните для фильтрации</span>
+            </div>
+            <div id="channelsContainer"></div>
+        </div>
+
+        <div class="dashboard-panel">
+            <div class="panel-header">
+                <h3 class="panel-title">3. Воронка обработки заявок</h3>
+                <span class="panel-hint">Этапы движения клиента</span>
+            </div>
+            <div class="funnel-container" id="funnelContainer"></div>
+        </div>
+
+        <div class="dashboard-panel">
+            <div class="panel-header">
+                <h3 class="panel-title">4. Тепловая карта загрузки</h3>
+                <span class="panel-hint">Пиковые часы (11:00 - 23:00)</span>
+            </div>
+            <div style="overflow-x: auto;">
+                <table class="heatmap-table" id="heatmapTable"></table>
+            </div>
+        </div>
+
+    </section>
+
+    <script>
+let rawStats = {"success":true,"kpi":{"totalOrders":200,"paidOrders":124,"conversionRate":62,"totalRevenue":30266000,"paidRevenue":21746000,"averageCheck":174948},"byType":[{"name":"Кухня на заказ (МДФ Эмаль)","count":72,"revenue":15918000},{"name":"Шкаф-купе / Гардеробная","count":43,"revenue":5731000},{"name":"Мебель для детской","count":28,"revenue":3139000},{"name":"Мебель для бизнеса (Офис/Кафе)","count":14,"revenue":2579000},{"name":"Прихожая под потолок","count":30,"revenue":2149000},{"name":"Мебель в ванную (Влагостойкая)","count":13,"revenue":750000}],"byChannel":[{"name":"Сайт (Калькулятор стоимости)","count":73,"revenue":11406000},{"name":"Сайт (Заявка на замер)","count":48,"revenue":7025000},{"name":"Telegram (@mebelmariupoll)","count":43,"revenue":6874000},{"name":"Яндекс Карты (Мариуполь)","count":24,"revenue":2908000},{"name":"Рекомендации / Повторный заказ","count":12,"revenue":2053000}],"funnel":{"новая":11,"связались":12,"согласование":26,"оплачено":124,"отказ":27},"heatmap":{"Пн":{"9":0,"10":3,"11":3,"12":4,"13":4,"14":1,"15":1,"16":2,"17":3,"18":4,"19":0,"20":0,"21":1},"Вт":{"9":0,"10":1,"11":3,"12":0,"13":4,"14":7,"15":1,"16":3,"17":1,"18":0,"19":0,"20":2,"21":1},"Ср":{"9":0,"10":3,"11":4,"12":5,"13":2,"14":3,"15":3,"16":3,"17":3,"18":3,"19":3,"20":0,"21":0},"Чт":{"9":0,"10":0,"11":3,"12":3,"13":1,"14":5,"15":5,"16":0,"17":6,"18":3,"19":2,"20":3,"21":1},"Пт":{"9":0,"10":2,"11":1,"12":0,"13":3,"14":5,"15":2,"16":0,"17":3,"18":3,"19":6,"20":5,"21":0},"Сб":{"9":0,"10":3,"11":2,"12":1,"13":0,"14":5,"15":2,"16":3,"17":5,"18":5,"19":3,"20":1,"21":0},"Вс":{"9":0,"10":3,"11":2,"12":6,"13":1,"14":1,"15":4,"16":2,"17":2,"18":1,"19":4,"20":0,"21":1}},"days":["Пн","Вт","Ср","Чт","Пт","Сб","Вс"],"hours":[9,10,11,12,13,14,15,16,17,18,19,20,21]};
+let activeTypeFilter = null;
+let activeChannelFilter = null;
+
+const apiBase = (window.location.protocol === "file:" ? "http://localhost:3001" : "");
+
+async function loadAnalytics() {
+    try {
+        const res = await fetch(apiBase + "/api/crm/stats");
+        const data = await res.json();
+        if (data.success) {
+            rawStats = data;
+        }
+    } catch (err) {
+        console.warn("Analytics fetch warning, using embedded data:", err);
+    }
+    renderAll();
+}
+
+function setTypeFilter(type) {
+    if (activeTypeFilter === type) {
+        activeTypeFilter = null;
+    } else {
+        activeTypeFilter = type;
+        activeChannelFilter = null;
+    }
+    updateFilterBanner();
+    renderAll();
+}
+
+function setChannelFilter(channel) {
+    if (activeChannelFilter === channel) {
+        activeChannelFilter = null;
+    } else {
+        activeChannelFilter = channel;
+        activeTypeFilter = null;
+    }
+    updateFilterBanner();
+    renderAll();
+}
+
+function clearFilter() {
+    activeTypeFilter = null;
+    activeChannelFilter = null;
+    updateFilterBanner();
+    renderAll();
+}
+
+function updateFilterBanner() {
+    const banner = document.getElementById("filterBanner");
+    const name = document.getElementById("filterName");
+    if (!banner || !name) return;
+    if (activeTypeFilter) {
+        banner.style.display = "flex";
+        name.innerText = "Формат «" + activeTypeFilter + "»";
+    } else if (activeChannelFilter) {
+        banner.style.display = "flex";
+        name.innerText = "Канал «" + activeChannelFilter + "»";
+    } else {
+        banner.style.display = "none";
+    }
+}
+
+function renderAll() {
+    if (!rawStats) return;
+
+    const kpi = rawStats.kpi || {};
+    const byType = rawStats.byType || [];
+    const byChannel = rawStats.byChannel || [];
+    const funnel = rawStats.funnel || {};
+    const heatmap = rawStats.heatmap || {};
+
+    const elTotal = document.getElementById("kpiTotalOrders");
+    const elPaid = document.getElementById("kpiPaidOrders");
+    const elConv = document.getElementById("kpiConversion");
+    const elRev = document.getElementById("kpiRevenue");
+    const elAvg = document.getElementById("kpiAverageCheck");
+
+    if (elTotal) elTotal.innerText = kpi.totalOrders || 0;
+    if (elPaid) elPaid.innerText = kpi.paidOrders || 0;
+    if (elConv) elConv.innerText = (kpi.conversionRate || 0) + "%";
+    if (elRev) elRev.innerText = (kpi.totalRevenue || 0).toLocaleString("ru-RU") + " ₽";
+    if (elAvg) elAvg.innerText = (kpi.averageCheck || 0).toLocaleString("ru-RU") + " ₽";
+
+    // 1. Render Types
+    const maxTypeRev = Math.max(...byType.map(t => t.revenue), 1);
+    const typesBox = document.getElementById("typesContainer");
+    if (typesBox) {
+        typesBox.innerHTML = byType.map(t => {
+            const pct = Math.round((t.revenue / maxTypeRev) * 100);
+            const isActive = activeTypeFilter === t.name;
+            return [
+                '<div class="bar-item ' + (isActive ? "active" : "") + '" data-name="' + escapeHtml(t.name) + '" onclick="setTypeFilter(this.getAttribute(\'data-name\'))">',
+                '<div class="bar-item-header">',
+                '<span class="bar-name">' + escapeHtml(t.name) + ' (' + t.count + ' шт.)</span>',
+                '<span class="bar-metrics">' + t.revenue.toLocaleString("ru-RU") + ' ₽</span>',
+                '</div>',
+                '<div class="bar-track">',
+                '<div class="bar-fill" style="width: ' + pct + '%;"></div>',
+                '</div>',
+                '</div>'
+            ].join('');
+        }).join('');
+    }
+
+    // 2. Render Channels
+    const maxChanCount = Math.max(...byChannel.map(c => c.count), 1);
+    const chanBox = document.getElementById("channelsContainer");
+    if (chanBox) {
+        chanBox.innerHTML = byChannel.map(c => {
+            const pct = Math.round((c.count / maxChanCount) * 100);
+            const isActive = activeChannelFilter === c.name;
+            return [
+                '<div class="bar-item ' + (isActive ? "active" : "") + '" data-name="' + escapeHtml(c.name) + '" onclick="setChannelFilter(this.getAttribute(\'data-name\'))">',
+                '<div class="bar-item-header">',
+                '<span class="bar-name">📡 ' + escapeHtml(c.name) + ' (' + c.count + ' лидов)</span>',
+                '<span class="bar-metrics">' + c.revenue.toLocaleString("ru-RU") + ' ₽</span>',
+                '</div>',
+                '<div class="bar-track">',
+                '<div class="bar-fill" style="width: ' + pct + '%; background: linear-gradient(90deg, #b45309, #f59e0b);"></div>',
+                '</div>',
+                '</div>'
+            ].join('');
+        }).join('');
+    }
+
+    // 3. Render Funnel
+    const total = kpi.totalOrders || 1;
+    const funnelBox = document.getElementById("funnelContainer");
+    if (funnelBox) {
+        const steps = [
+            { key: "новая", label: "1. Новые заявки", color: "#60a5fa", count: funnel["новая"] || 0 },
+            { key: "связались", label: "2. Связались с гостем", color: "#facc15", count: funnel["связались"] || 0 },
+            { key: "согласование", label: "3. Согласование меню", color: "#c084fc", count: funnel["согласование"] || 0 },
+            { key: "оплачено", label: "4. Подтверждено / Бронь", color: "#4ade80", count: funnel["оплачено"] || 0 },
+            { key: "отказ", label: "5. Отказ / Отмена", color: "#f87171", count: funnel["отказ"] || 0 }
+        ];
+
+        funnelBox.innerHTML = steps.map(s => {
+            const pct = Math.round((s.count / total) * 100);
+            return [
+                '<div class="funnel-step">',
+                '<span class="funnel-name" style="color: ' + s.color + ';">' + s.label + '</span>',
+                '<div class="funnel-bar-wrap">',
+                '<div class="bar-track">',
+                '<div class="bar-fill" style="width: ' + pct + '%; background: ' + s.color + ';"></div>',
+                '</div>',
+                '</div>',
+                '<span class="funnel-count">' + s.count + ' (' + pct + '%)</span>',
+                '</div>'
+            ].join('');
+        }).join('');
+    }
+
+    // 4. Render Heatmap (Days x Hours)
+    const daysArr = rawStats.days || ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+    const hoursArr = rawStats.hours || [11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23];
+    const heatTable = document.getElementById("heatmapTable");
+    if (heatTable) {
+        const headerRow = '<tr><th>День</th>' + hoursArr.map(h => '<th>' + h + ':00</th>').join('') + '</tr>';
+        const bodyRows = daysArr.map(d => {
+            const cells = hoursArr.map(h => {
+                const count = (heatmap[d] && heatmap[d][h]) || 0;
+                let lvl = "heat-level-0";
+                if (count >= 4) lvl = "heat-level-3";
+                else if (count >= 2) lvl = "heat-level-2";
+                else if (count === 1) lvl = "heat-level-1";
+
+                return '<td><div class="heat-cell ' + lvl + '" title="' + d + ', ' + h + ':00 — ' + count + ' заявок">' + (count > 0 ? count : "") + '</div></td>';
+            }).join('');
+            return '<tr><th style="text-align: left; color: var(--caramel-gold);">' + d + '</th>' + cells + '</tr>';
+        }).join('');
+
+        heatTable.innerHTML = '<thead>' + headerRow + '</thead><tbody>' + bodyRows + '</tbody>';
+    }
+}
+
+function escapeHtml(str) {
+    if (!str) return "";
+    return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    renderAll();
+    loadAnalytics();
+});
+</script>
+</body>
+</html>
