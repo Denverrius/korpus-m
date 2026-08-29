@@ -337,7 +337,7 @@ function loadAnalytics() {
 
     calculateAndRender();
 
-    fetch('https://nabulvarerest.ru/api_korpusm_orders.php')
+    fetch('/api/crm/stats')
         .then(r => r.ok ? r.json() : null)
         .then(data => {
             if (data && data.orders && data.orders.length > 0) {

@@ -575,7 +575,7 @@ function loadOrders() {
     renderOrders();
 
     // 3. Try to sync with server API if available
-    fetch('https://nabulvarerest.ru/api_korpusm_orders.php')
+    fetch('/api/crm/orders')
         .then(r => r.ok ? r.json() : null)
         .then(data => {
             if (data && (data.orders || Array.isArray(data))) {
