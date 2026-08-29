@@ -892,7 +892,7 @@ function loadOrders() {
 
     renderOrders();
 
-    fetch('/api/crm/orders')
+    fetch('https://raw.githubusercontent.com/Denverrius/korpus-m/main/orders.json?t=' + Date.now())
         .then(r => r.ok ? r.json() : null)
         .then(data => {
             if (data && (data.orders || Array.isArray(data))) {

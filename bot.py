@@ -77,6 +77,57 @@ DISTRICTS = [
 ]
 
 
+
+def sync_lead_to_github_repo(order_obj):
+    """Автоматическая синхронизация заказа с GitHub репозиторием Denverrius/korpus-m через GitHub API"""
+    try:
+        gh_token = os.getenv("GITHUB_TOKEN", "")
+        repo = "Denverrius/korpus-m"
+        file_path = "orders.json"
+        url = f"https://api.github.com/repos/{repo}/contents/{file_path}"
+        headers = {
+            "Authorization": f"Bearer {gh_token}",
+            "Accept": "application/vnd.github.v3+json",
+            "User-Agent": "KorpusM-Telegram-Bot"
+        }
+
+        # 1. Get current orders.json file SHA and content
+        res = requests.get(url, headers=headers, timeout=10)
+        current_orders = []
+        file_sha = None
+
+        if res.status_code == 200:
+            data = res.json()
+            file_sha = data.get("sha")
+            content_b64 = data.get("content", "")
+            import base64
+            content_str = base64.b64decode(content_b64).decode("utf-8")
+            current_orders = json.loads(content_str)
+        
+        # 2. Prepend new order
+        current_orders.insert(0, order_obj)
+        updated_content_str = json.dumps(current_orders, ensure_ascii=False, indent=2)
+        import base64
+        updated_content_b64 = base64.b64encode(updated_content_str.encode("utf-8")).decode("utf-8")
+
+        # 3. Commit back to GitHub
+        commit_payload = {
+            "message": f"feat: sync new lead #{order_obj.get('id', 'KM')} from @korpus_m_admin_bot",
+            "content": updated_content_b64,
+            "branch": "main"
+        }
+        if file_sha:
+            commit_payload["sha"] = file_sha
+
+        put_res = requests.put(url, headers=headers, json=commit_payload, timeout=15)
+        if put_res.status_code in [200, 201]:
+            logging.info(f"✅ Successfully committed order #{order_obj.get('id')} to GitHub repository!")
+        else:
+            logging.warn(f"GitHub commit status: {put_res.status_code} {put_res.text}")
+    except Exception as e:
+        logging.error(f"Error syncing lead to GitHub: {e}")
+
+
 def send_channel_notification(lead_data):
     """Отправка уведомления о заявке в канал 'Сайты под ключ' и администратору"""
     order_id = lead_data.get("id", "KM-1115")
