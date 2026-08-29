@@ -1603,6 +1603,15 @@ section{padding:80px 0;border-bottom:1px solid var(--line)}
 </div>
 
 <script>
+
+function saveOrderToLocalCRM(order) {
+  try {
+    let list = JSON.parse(localStorage.getItem('korpusm_crm_custom_orders') || '[]');
+    list.unshift(order);
+    localStorage.setItem('korpusm_crm_custom_orders', JSON.stringify(list));
+  } catch(e) {}
+}
+
 // Progress bar
 window.addEventListener('scroll', () => {
   const winScroll = document.documentElement.scrollTop;
@@ -2197,6 +2206,26 @@ function filterPortfolio(category, btn) {
   }
 
   async function submitChatLead(phoneOrText) {
+    const nextNum = 1120 + Math.floor(Math.random() * 50);
+    const orderId = 'KM-' + nextNum;
+    const now = new Date();
+    saveOrderToLocalCRM({
+      id: orderId,
+      number: nextNum,
+      createdAt: now.toISOString(),
+      name: 'Клиент с онлайн-консультанта',
+      phone: phoneOrText.trim(),
+      address: 'г. Мариуполь (' + (chatOrderData.district || 'Центральный') + ')',
+      date: now.toISOString().split('T')[0],
+      time: now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
+      type: chatOrderData.type || 'Кухня на заказ',
+      material: chatOrderData.material || 'ЛДСП Egger + Blum',
+      amount: chatOrderData.amount || 165000,
+      source: 'Онлайн-консультант на сайте',
+      comment: 'Заявка из веб-виджета. Район: ' + (chatOrderData.district || 'Мариуполь'),
+      status: 'новая',
+      tg_delivered: true
+    });
     const rawDigits = phoneOrText.replace(/\D/g, '');
     const cleanPhone = phoneOrText.trim();
     const orderId = 'KM-' + Math.floor(1000 + Math.random() * 900);
