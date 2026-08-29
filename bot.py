@@ -7,11 +7,7 @@ Bot: @korpus_m_admin_bot
 Телефон мастера: +7 (949) 710-52-78
 Сайт: https://denverrius.github.io/korpus-m/
 CRM: https://denverrius.github.io/korpus-m/crm.html
-
-Сквозная интеграция:
-- Каждая заявка из Telegram-бота мгновенно отправляется в канал «Сайты под ключ»
-- Заявка сохраняется в SQLite (leads.db) и файловую базу заказов CRM (.data/orders/*.json)
-- Автоматически обновляются счетчики в CRM (crm.html) и дашборде аналитики (analytics.html)
+Аналитика: https://denverrius.github.io/korpus-m/analytics.html
 """
 
 import os
@@ -27,8 +23,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8674575940:AAHHSoOujULSKDsuS6MCr3hvY2i4eVK4E4c")
-CHANNEL_ID = os.getenv("CHANNEL_ID", "@saitypodkluch")  # Канал "Сайты под ключ"
+CHANNEL_ID = os.getenv("CHANNEL_ID", "@saitypodkluch")
 ADMIN_ID = os.getenv("ADMIN_ID", "8086868178")
+ADMIN_IDS = [str(ADMIN_ID), "8086868178"]
+
 PHONE_NUMBER = "+7 (949) 710-52-78"
 TG_BOT_LINK = "https://t.me/korpus_m_admin_bot"
 WEBAPP_SITE_URL = "https://denverrius.github.io/korpus-m/"
@@ -45,7 +43,12 @@ if not os.path.exists(DATA_ORDERS_DIR):
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 bot = TeleBot(BOT_TOKEN)
 
-# Initialize Database
+
+def is_admin(user_id):
+    """Проверка прав администратора"""
+    return str(user_id) in ADMIN_IDS or str(user_id) == str(ADMIN_ID)
+
+
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
@@ -69,7 +72,6 @@ def init_db():
 
 init_db()
 
-# User session state store
 user_sessions = {}
 
 DISTRICTS = [
@@ -77,9 +79,8 @@ DISTRICTS = [
 ]
 
 
-
 def sync_lead_to_github_repo(order_obj):
-    """Автоматическая синхронизация заказа с GitHub репозиторием Denverrius/korpus-m через GitHub API"""
+    """Автоматическая синхронизация заказа с GitHub репозиторием Denverrius/korpus-m"""
     try:
         gh_token = os.getenv("GITHUB_TOKEN", "")
         repo = "Denverrius/korpus-m"
@@ -91,7 +92,6 @@ def sync_lead_to_github_repo(order_obj):
             "User-Agent": "KorpusM-Telegram-Bot"
         }
 
-        # 1. Get current orders.json file SHA and content
         res = requests.get(url, headers=headers, timeout=10)
         current_orders = []
         file_sha = None
@@ -104,13 +104,11 @@ def sync_lead_to_github_repo(order_obj):
             content_str = base64.b64decode(content_b64).decode("utf-8")
             current_orders = json.loads(content_str)
         
-        # 2. Prepend new order
         current_orders.insert(0, order_obj)
         updated_content_str = json.dumps(current_orders, ensure_ascii=False, indent=2)
         import base64
         updated_content_b64 = base64.b64encode(updated_content_str.encode("utf-8")).decode("utf-8")
 
-        # 3. Commit back to GitHub
         commit_payload = {
             "message": f"feat: sync new lead #{order_obj.get('id', 'KM')} from @korpus_m_admin_bot",
             "content": updated_content_b64,
@@ -123,7 +121,7 @@ def sync_lead_to_github_repo(order_obj):
         if put_res.status_code in [200, 201]:
             logging.info(f"✅ Successfully committed order #{order_obj.get('id')} to GitHub repository!")
         else:
-            logging.warn(f"GitHub commit status: {put_res.status_code} {put_res.text}")
+            logging.warn(f"GitHub commit status: {put_res.status_code}")
     except Exception as e:
         logging.error(f"Error syncing lead to GitHub: {e}")
 
@@ -150,10 +148,10 @@ def send_channel_notification(lead_data):
         f"🔩 <b>Материалы:</b> {material}\n"
         f"💰 <b>Смета:</b> {estimate:,} ₽\n"
         f"🌐 <b>Источник:</b> Telegram-бот @korpus_m_admin_bot\n\n"
-        f"✅ <i>Заявка успешно продублирована в CRM цеха и аналитику.</i>"
+        f"✅ <i>Заявка автоматически поступила в CRM цеха и аналитику.</i>"
     ).replace(",", " ")
 
-    # 1. Send to Channel "Сайты под ключ"
+    # Send to Channel "Сайты под ключ"
     try:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
         requests.post(url, json={"chat_id": CHANNEL_ID, "text": html_text, "parse_mode": "HTML"}, timeout=10)
@@ -161,7 +159,7 @@ def send_channel_notification(lead_data):
     except Exception as e:
         logging.warn(f"Failed to send to channel {CHANNEL_ID}: {e}")
 
-    # 2. Send to Admin
+    # Send to Admin
     if ADMIN_ID and ADMIN_ID != CHANNEL_ID:
         try:
             requests.post(url, json={"chat_id": ADMIN_ID, "text": html_text, "parse_mode": "HTML"}, timeout=10)
@@ -175,7 +173,7 @@ def duplicate_lead_to_crm(lead_data):
     try:
         now = datetime.datetime.now()
         existing_files = [f for f in os.listdir(DATA_ORDERS_DIR) if f.endswith('.json')] if os.path.exists(DATA_ORDERS_DIR) else []
-        next_num = 1000 + len(existing_files) + 1
+        next_num = 1210 + len(existing_files) + 1
         order_id = f"KM-{next_num}"
 
         order_obj = {
@@ -201,6 +199,7 @@ def duplicate_lead_to_crm(lead_data):
             json.dump(order_obj, f, ensure_ascii=False, indent=2)
         
         logging.info(f"✅ Saved order #{order_id} to CRM JSON store")
+        sync_lead_to_github_repo(order_obj)
         return order_id
     except Exception as e:
         logging.error(f"Error saving to CRM store: {e}")
@@ -210,23 +209,49 @@ def duplicate_lead_to_crm(lead_data):
 def get_main_menu():
     markup = types.InlineKeyboardMarkup(row_width=1)
     markup.add(
-        types.InlineKeyboardButton("🌐 Открыть сайт и 3D-каталог", web_app=types.WebAppInfo(url=WEBAPP_SITE_URL)),
+        types.InlineKeyboardButton("🌐 Открыть сайт и 3D-каталог", url=WEBAPP_SITE_URL, web_app=types.WebAppInfo(url=WEBAPP_SITE_URL)),
         types.InlineKeyboardButton("🪚 Рассчитать стоимость мебели", callback_data="calc_start"),
         types.InlineKeyboardButton("📐 Записаться на замер с образцами", callback_data="measure_start"),
         types.InlineKeyboardButton("📸 Реальные работы мастера в Мариуполе", callback_data="portfolio_show"),
         types.InlineKeyboardButton("⭐ Отзывы наших заказчиков", callback_data="reviews_show"),
-        types.InlineKeyboardButton("💬 Прямой чат с мастером", url="https://t.me/mebelmariupoll"),
+        types.InlineKeyboardButton("💬 Прямой чат с мастером", url="https://t.me/Denver949"),
         types.InlineKeyboardButton("📞 Позвонить мастеру: " + PHONE_NUMBER, callback_data="show_phone")
     )
+    return markup
+
+
+def get_admin_keyboard():
+    """Админская клавиатура с кнопками входа в CRM и Аналитику"""
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    markup.add(
+        types.InlineKeyboardButton("📊 Вход в CRM-систему", url=WEBAPP_CRM_URL, web_app=types.WebAppInfo(url=WEBAPP_CRM_URL)),
+        types.InlineKeyboardButton("📈 Вход в Аналитику", url=WEBAPP_ANALYTICS_URL, web_app=types.WebAppInfo(url=WEBAPP_ANALYTICS_URL)),
+        types.InlineKeyboardButton("📋 Свежие заявки из базы", callback_data="admin_recent_leads"),
+        types.InlineKeyboardButton("💰 Сводка по производству", callback_data="admin_stats_summary"),
+        types.InlineKeyboardButton("📢 Канал уведомлений @saitypodkluch", url="https://t.me/saitypodkluch"),
+        types.InlineKeyboardButton("🌐 Открыть сайт KorpusM", url=WEBAPP_SITE_URL, web_app=types.WebAppInfo(url=WEBAPP_SITE_URL))
+    )
+    return markup
+
+
+def get_reply_keyboard(user_is_admin=False):
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    if user_is_admin:
+        markup.row(types.KeyboardButton("👑 Панель Администратора"))
+        markup.row(types.KeyboardButton("📊 Войти в CRM"), types.KeyboardButton("📈 Войти в Аналитику"))
+    markup.row(types.KeyboardButton("🪚 Рассчитать мебель"), types.KeyboardButton("📐 Записаться на замер"))
+    markup.row(types.KeyboardButton("📁 Портфолио цеха"), types.KeyboardButton("📞 Контакты мастера"))
     return markup
 
 
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
     chat_id = message.chat.id
+    user_id = message.from_user.id
     user_sessions[chat_id] = {}
 
     first_name = message.from_user.first_name or "Гость"
+    user_is_admin = is_admin(user_id)
     
     text = (
         f"👋 Здравствуйте, **{first_name}**!\n\n"
@@ -237,87 +262,128 @@ def send_welcome(message):
         "✦ **Прихожие, детские и мебель в ванную**\n"
         "✦ **Мебель для кафе, магазинов и бизнеса**\n\n"
         "📍 *Собственный цех в Мариуполе — честные цены без салонных наценок, доставка и монтаж под ключ.*\n\n"
-        "Выберите действие ниже, чтобы рассчитать смету или вызвать мастера на бесплатный замер с образцами:"
     )
-    bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=get_main_menu())
+    
+    if user_is_admin:
+        text += "👑 **Вы авторизованы как Администратор.**\nДля входа в CRM и аналитику используйте кнопку ниже или команду /admin.\n\n"
+
+    text += "Выберите действие ниже, чтобы рассчитать смету или вызвать мастера на бесплатный замер с образцами:"
+    
+    bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=get_reply_keyboard(user_is_admin))
+    bot.send_message(chat_id, "Меню действий:", reply_markup=get_main_menu())
 
 
-@bot.message_handler(commands=['leads', 'orders'])
-def view_leads(message):
-    """Панель мастера: просмотр последних заявок"""
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("SELECT id, created_at, client_name, phone, item_type, estimate, district, status FROM leads ORDER BY id DESC LIMIT 5")
-    rows = c.fetchall()
-    conn.close()
-
-    if not rows:
-        bot.reply_to(message, "📭 В базе пока нет новых заявок.")
+@bot.message_handler(commands=['admin', 'crm', 'analytics', 'dashboard'])
+def admin_panel_command(message):
+    """Специальная команда админ-панели (только для админов)"""
+    user_id = message.from_user.id
+    if not is_admin(user_id):
+        bot.reply_to(
+            message,
+            "⛔ <b>Доступ ограничен</b>\n\n"
+            "Панель администратора, CRM и аналитика доступны только руководству компании «Корпус М».",
+            parse_mode="HTML"
+        )
         return
 
-    text = "📋 **Последние заявки «Корпус М» (Мариуполь):**\n\n"
-    for r in rows:
-        st_icon = "🟡" if r[7] == "Новая" else "⚙️"
-        text += (
-            f"{st_icon} **Заказ #KM-{r[0]}** ({r[1]})\n"
-            f"👤 Клиент: {r[2]}\n"
-            f"📞 Телефон: `{r[3]}`\n"
-            f"🪑 Изделие: {r[4]}\n"
-            f"📍 Район: {r[6]}\n"
-            f"💰 Оценка: {r[5]:,} ₽\n\n"
-        )
-    
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("📊 Открыть CRM заказов цеха", web_app=types.WebAppInfo(url=WEBAPP_CRM_URL)))
-    bot.reply_to(message, text.replace(",", " "), parse_mode="Markdown", reply_markup=markup)
-
-
-@bot.message_handler(commands=['stats'])
-def view_stats(message):
-    """Сводка аналитики по заявкам"""
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("SELECT COUNT(*), SUM(estimate), AVG(estimate) FROM leads")
-    row = c.fetchone()
-    conn.close()
-
-    total_leads = row[0] or 0
-    total_sum = row[1] or 0
-    avg_sum = int(row[2] or 0)
+    total_leads = 0
+    new_leads = 0
+    total_sum = 0
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        total_leads = c.execute("SELECT COUNT(*) FROM leads").fetchone()[0] or 0
+        new_leads = c.execute("SELECT COUNT(*) FROM leads WHERE status='Новая'").fetchone()[0] or 0
+        total_sum = c.execute("SELECT SUM(estimate) FROM leads").fetchone()[0] or 0
+        conn.close()
+    except Exception:
+        pass
 
     text = (
-        "📊 **Сводка производства «Корпус М»:**\n\n"
-        f"• Всего обработано заявок: **{total_leads}**\n"
-        f"• Общая сумма смет: **{total_sum:,} ₽**\n"
-        f"• Средний чек проекта: **{avg_sum:,} ₽**\n"
-        "• Активных заказов в цехе: **3 проекта**\n"
+        "👑 <b>ПАНЕЛЬ АДМИНИСТРАТОРА • КОРПУС М</b>\n\n"
+        f"Здравствуйте, <b>{message.from_user.first_name}</b>!\n\n"
+        f"📊 <b>Статистика базы:</b>\n"
+        f"• Всего заявок: <b>{total_leads}</b>\n"
+        f"• Новых в очереди: <b>{new_leads}</b>\n"
+        f"• Общая сумма смет: <b>{total_sum:,} ₽</b>\n"
+        f"• Канал уведомлений: <b>@saitypodkluch</b>\n\n"
+        "Выберите раздел для перехода:"
     ).replace(",", " ")
 
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("📈 Открыть дашборд аналитики", web_app=types.WebAppInfo(url=WEBAPP_ANALYTICS_URL)))
-    bot.reply_to(message, text, parse_mode="Markdown", reply_markup=markup)
+    bot.send_message(message.chat.id, text, parse_mode="HTML", reply_markup=get_admin_keyboard())
 
 
-# Photo handler for customer blueprints / room pictures
-@bot.message_handler(content_types=['photo'])
-def handle_photo(message):
+@bot.message_handler(func=lambda msg: msg.text in [
+    "👑 Панель Администратора", "📊 Войти в CRM", "📈 Войти в Аналитику",
+    "🪚 Рассчитать мебель", "📐 Записаться на замер", "📁 Портфолио цеха", "📞 Контакты мастера"
+])
+def handle_menu_buttons(message):
+    text = message.text
+    user_id = message.from_user.id
     chat_id = message.chat.id
-    if chat_id not in user_sessions:
-        user_sessions[chat_id] = {}
-    
-    user_sessions[chat_id]["has_photo"] = 1
-    
-    text = (
-        "📸 **Фотография / эскиз получен!**\n\n"
-        "Мастер Евгений изучит размеры и конструктивные особенности помещения.\n\n"
-        "Пожалуйста, **напишите ваш номер телефона и имя** (+7 949 ...), чтобы мы перезвонили с готовым расчетом:"
-    )
-    bot.reply_to(message, text, parse_mode="Markdown")
+
+    if text == "👑 Панель Администратора":
+        admin_panel_command(message)
+
+    elif text == "📊 Войти в CRM":
+        if not is_admin(user_id):
+            bot.reply_to(message, "🔒 Доступ к CRM цеха разрешен только Администратору и Мастеру.")
+            return
+        markup = types.InlineKeyboardMarkup()
+        markup.add(types.InlineKeyboardButton("📊 Открыть CRM-систему", url=WEBAPP_CRM_URL, web_app=types.WebAppInfo(url=WEBAPP_CRM_URL)))
+        bot.send_message(chat_id, "🔐 **CRM-система управления заказами KorpusM:**\n\nЛогин для входа: `admin` или `master`", parse_mode="Markdown", reply_markup=markup)
+
+    elif text == "📈 Войти в Аналитику":
+        if not is_admin(user_id):
+            bot.reply_to(message, "🔒 Финансовая аналитика доступна только Владельцу (Администратору).")
+            return
+        markup = types.InlineKeyboardMarkup()
+        markup.add(types.InlineKeyboardButton("📈 Открыть Аналитический дашборд", url=WEBAPP_ANALYTICS_URL, web_app=types.WebAppInfo(url=WEBAPP_ANALYTICS_URL)))
+        bot.send_message(chat_id, "📈 **Аналитика продаж, воронка и загрузка цеха KorpusM:**", parse_mode="Markdown", reply_markup=markup)
+
+    elif text == "🪚 Рассчитать мебель":
+        markup = types.InlineKeyboardMarkup(row_width=1)
+        markup.add(
+            types.InlineKeyboardButton("🍳 Кухня на заказ", callback_data="calc_type_kitchen"),
+            types.InlineKeyboardButton("🚪 Шкаф-купе / Гардеробная", callback_data="calc_type_wardrobe"),
+            types.InlineKeyboardButton("🧥 Прихожая под потолок", callback_data="calc_type_hall"),
+            types.InlineKeyboardButton("☕ Мебель для бизнеса / Офис", callback_data="calc_type_commercial"),
+            types.InlineKeyboardButton("◀ Назад в меню", callback_data="main_menu")
+        )
+        bot.send_message(chat_id, "🪚 **Шаг 1 из 3:** Выберите тип мебели для расчета стоимости:", parse_mode="Markdown", reply_markup=markup)
+
+    elif text == "📐 Записаться на замер":
+        markup = types.InlineKeyboardMarkup(row_width=1)
+        for dist in DISTRICTS:
+            markup.add(types.InlineKeyboardButton(f"📍 {dist}", callback_data=f"dist_{dist}"))
+        markup.add(types.InlineKeyboardButton("◀ В главное меню", callback_data="main_menu"))
+        bot.send_message(chat_id, "📐 **Бесплатный выезд мастера на замер по Мариуполю:**\n\nВ каком **районе Мариуполя** находится ваш объект?", parse_mode="Markdown", reply_markup=markup)
+
+    elif text == "📁 Портфолио цеха":
+        markup = types.InlineKeyboardMarkup(row_width=1)
+        markup.add(
+            types.InlineKeyboardButton("🌐 Смотреть всё портфолио на сайте", url=WEBAPP_SITE_URL + "#portfolio", web_app=types.WebAppInfo(url=WEBAPP_SITE_URL + "#portfolio")),
+            types.InlineKeyboardButton("🪚 Рассчитать стоимость", callback_data="calc_start")
+        )
+        bot.send_message(chat_id, "📸 **Живое портфолио мебельного цеха «Корпус М» (Мариуполь):**\nБолее 480+ фото и видеообзоров на сайте!", parse_mode="Markdown", reply_markup=markup)
+
+    elif text == "📞 Контакты мастера":
+        bot.send_message(
+            chat_id,
+            f"📞 **Контакты основателя и мастера Евгения Йулдашова:**\n\n"
+            f"• Телефон: **{PHONE_NUMBER}**\n"
+            "• Telegram: @Denver949\n"
+            "• Канал с отчётами: @korpus_m_admin_bot\n"
+            "• Цех: г. Мариуполь (работаем по всему городу и пригороду)\n\n"
+            "Пн–Сб с 9:00 до 19:00",
+            parse_mode="Markdown"
+        )
 
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback_handler(call):
     chat_id = call.message.chat.id
+    user_id = call.from_user.id
     if chat_id not in user_sessions:
         user_sessions[chat_id] = {}
 
@@ -332,6 +398,84 @@ def callback_handler(call):
             parse_mode="Markdown",
             reply_markup=get_main_menu()
         )
+
+    elif data == "admin_menu":
+        bot.answer_callback_query(call.id)
+        if not is_admin(user_id):
+            bot.send_message(chat_id, "⛔ Доступ к панели администратора разрешен только руководству.")
+            return
+        bot.edit_message_text(
+            "👑 <b>Панель Администратора KorpusM:</b>",
+            chat_id=chat_id,
+            message_id=call.message.message_id,
+            parse_mode="HTML",
+            reply_markup=get_admin_keyboard()
+        )
+
+    elif data == "admin_recent_leads":
+        bot.answer_callback_query(call.id)
+        if not is_admin(user_id):
+            bot.send_message(chat_id, "⛔ Доступ ограничен.")
+            return
+        
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute("SELECT id, created_at, client_name, phone, item_type, estimate, district, status FROM leads ORDER BY id DESC LIMIT 5")
+        rows = c.fetchall()
+        conn.close()
+
+        if not rows:
+            bot.send_message(chat_id, "📭 В базе пока нет заявок.")
+            return
+
+        text = "📋 <b>Последние заявки из базы:</b>\n\n"
+        for r in rows:
+            st_icon = "🟡" if r[7] == "Новая" else "⚙️"
+            text += (
+                f"{st_icon} <b>Заказ #KM-{r[0]}</b> ({r[1]})\n"
+                f"👤 Клиент: {r[2]}\n"
+                f"📞 Телефон: <code>{r[3]}</code>\n"
+                f"🪑 Изделие: {r[4]}\n"
+                f"📍 Район: {r[6]}\n"
+                f"💰 Оценка: {r[5]:,} ₽\n\n"
+            )
+        markup = types.InlineKeyboardMarkup(row_width=1)
+        markup.add(
+            types.InlineKeyboardButton("📊 Открыть CRM", url=WEBAPP_CRM_URL, web_app=types.WebAppInfo(url=WEBAPP_CRM_URL)),
+            types.InlineKeyboardButton("◀ Назад в админку", callback_data="admin_menu")
+        )
+        bot.send_message(chat_id, text.replace(",", " "), parse_mode="HTML", reply_markup=markup)
+
+    elif data == "admin_stats_summary":
+        bot.answer_callback_query(call.id)
+        if not is_admin(user_id):
+            bot.send_message(chat_id, "⛔ Доступ ограничен.")
+            return
+
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute("SELECT COUNT(*), SUM(estimate), AVG(estimate) FROM leads")
+        row = c.fetchone()
+        conn.close()
+
+        total_leads = row[0] or 0
+        total_sum = row[1] or 0
+        avg_sum = int(row[2] or 0)
+
+        text = (
+            "💰 <b>Финансовая сводка цеха «Корпус М»</b>\n\n"
+            f"• Всего зарегистрировано заявок: <b>{total_leads}</b>\n"
+            f"• Суммарный объем смет: <b>{total_sum:,} ₽</b>\n"
+            f"• Средний чек проекта: <b>{avg_sum:,} ₽</b>\n"
+            "• В производстве: <b>3 активных проекта</b>\n"
+        ).replace(",", " ")
+
+        markup = types.InlineKeyboardMarkup(row_width=1)
+        markup.add(
+            types.InlineKeyboardButton("📈 Открыть Аналитику", url=WEBAPP_ANALYTICS_URL, web_app=types.WebAppInfo(url=WEBAPP_ANALYTICS_URL)),
+            types.InlineKeyboardButton("◀ Назад в админку", callback_data="admin_menu")
+        )
+        bot.send_message(chat_id, text, parse_mode="HTML", reply_markup=markup)
 
     elif data == "show_phone":
         bot.answer_callback_query(call.id)
@@ -413,7 +557,7 @@ def callback_handler(call):
         markup = types.InlineKeyboardMarkup(row_width=1)
         markup.add(
             types.InlineKeyboardButton("📐 Записаться на замер с образцами", callback_data="measure_start"),
-            types.InlineKeyboardButton("🌐 Открыть 3D-калькулятор на сайте", web_app=types.WebAppInfo(url=WEBAPP_SITE_URL)),
+            types.InlineKeyboardButton("🌐 Открыть 3D-калькулятор на сайте", url=WEBAPP_SITE_URL, web_app=types.WebAppInfo(url=WEBAPP_SITE_URL)),
             types.InlineKeyboardButton("◀ В главное меню", callback_data="main_menu")
         )
 
@@ -458,7 +602,7 @@ def callback_handler(call):
         bot.answer_callback_query(call.id)
         markup = types.InlineKeyboardMarkup(row_width=1)
         markup.add(
-            types.InlineKeyboardButton("🌐 Смотреть всё портфолио на сайте", web_app=types.WebAppInfo(url=WEBAPP_SITE_URL + "#portfolio")),
+            types.InlineKeyboardButton("🌐 Смотреть всё портфолио на сайте", url=WEBAPP_SITE_URL + "#portfolio", web_app=types.WebAppInfo(url=WEBAPP_SITE_URL + "#portfolio")),
             types.InlineKeyboardButton("🪚 Рассчитать стоимость проекта", callback_data="calc_start"),
             types.InlineKeyboardButton("◀ Назад в меню", callback_data="main_menu")
         )
@@ -520,14 +664,12 @@ def handle_text(message):
         c.execute('''INSERT INTO leads (created_at, client_name, username, phone, district, item_type, length, material, estimate, has_photo, comment, status)
                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                   (now_str, client_name, username, text, district, item_type, length_val, material, estimate, has_photo, f"Заявка из Telegram бота @korpus_m_admin_bot", "Новая"))
-        sql_lead_id = c.lastrowid
         conn.commit()
         conn.close()
     except Exception as e:
         logging.error(f"DB Error: {e}")
-        sql_lead_id = 1115
 
-    # 2. Duplicate to CRM JSON Store (shows up in crm.html and analytics.html)
+    # 2. Duplicate to CRM JSON Store
     lead_dict = {
         "name": client_name,
         "phone": text,
@@ -551,7 +693,7 @@ def handle_text(message):
 
     markup = types.InlineKeyboardMarkup()
     markup.add(
-        types.InlineKeyboardButton("🌐 Перейти на сайт Корпус М", web_app=types.WebAppInfo(url=WEBAPP_SITE_URL)),
+        types.InlineKeyboardButton("🌐 Перейти на сайт Корпус М", url=WEBAPP_SITE_URL, web_app=types.WebAppInfo(url=WEBAPP_SITE_URL)),
         types.InlineKeyboardButton("◀ В главное меню", callback_data="main_menu")
     )
 
@@ -559,5 +701,5 @@ def handle_text(message):
 
 
 if __name__ == "__main__":
-    logging.info("🪵 Korpus M Telegram Bot (@korpus_m_admin_bot) started polling with channel notifications...")
+    logging.info("🪵 Korpus M Telegram Bot (@korpus_m_admin_bot) started polling...")
     bot.infinity_polling(timeout=20, long_polling_timeout=10)
