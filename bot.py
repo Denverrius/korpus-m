@@ -19,20 +19,25 @@ import sqlite3
 import datetime
 import logging
 import requests
-import urllib3.util.connection as urllib3_cn
 
-# 1. FORCE IPV4 ONLY (Resolves Reg.ru IPv6 timeout issues with api.telegram.org)
-def allowed_gai_family():
-    return socket.AF_INET
+# 1. PIN VERIFIED WORKING TELEGRAM GATEWAY (149.154.167.220)
+_orig_getaddrinfo = socket.getaddrinfo
 
-urllib3_cn.allowed_gai_family = allowed_gai_family
+def _custom_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
+    if host == "api.telegram.org":
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("149.154.167.220", port))]
+    responses = _orig_getaddrinfo(host, port, family, type, proto, flags)
+    ipv4 = [r for r in responses if r[0] == socket.AF_INET]
+    return ipv4 if ipv4 else responses
+
+socket.getaddrinfo = _custom_getaddrinfo
 
 from telebot import TeleBot, types
 from dotenv import load_dotenv
 
 load_dotenv()
 
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8674575940:AAHHSoOujULSKDsuS6MCr3hvY2i4eVK4E4c")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8674575940:AAFICozyuZjPy0PNAOeR5hR7gTPgP4Q7gB0")
 CHANNEL_ID = os.getenv("CHANNEL_ID", "@saitypodkluch")
 ADMIN_ID = os.getenv("ADMIN_ID", "8086868178")
 ADMIN_IDS = [str(ADMIN_ID), "8086868178"]
@@ -732,5 +737,5 @@ def handle_text(message):
 
 
 if __name__ == "__main__":
-    logging.info("🪵 Korpus M Telegram Bot (@korpus_m_admin_bot) started polling with IPv4 & Admin Panel...")
+    logging.info("🪵 Korpus M Telegram Bot (@korpus_m_admin_bot) started polling...")
     bot.infinity_polling(timeout=20, long_polling_timeout=10)
