@@ -27,7 +27,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8674575940:AAHHSoOujULSKDsuS6MCr3hvY2i4eVK4E4c")
-CHANNEL_ID = os.getenv("CHANNEL_ID", "-1004414921642")  # Канал "Сайты под ключ"
+CHANNEL_ID = os.getenv("CHANNEL_ID", "@saitypodkluch")  # Канал "Сайты под ключ"
 ADMIN_ID = os.getenv("ADMIN_ID", "8086868178")
 PHONE_NUMBER = "+7 (949) 710-52-78"
 TG_BOT_LINK = "https://t.me/korpus_m_admin_bot"
