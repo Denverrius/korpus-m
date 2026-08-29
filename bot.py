@@ -13,10 +13,20 @@ CRM: https://denverrius.github.io/korpus-m/crm.html
 import os
 import glob
 import json
+import html
+import socket
 import sqlite3
 import datetime
 import logging
 import requests
+import urllib3.util.connection as urllib3_cn
+
+# 1. FORCE IPV4 ONLY (Resolves Reg.ru IPv6 timeout issues with api.telegram.org)
+def allowed_gai_family():
+    return socket.AF_INET
+
+urllib3_cn.allowed_gai_family = allowed_gai_family
+
 from telebot import TeleBot, types
 from dotenv import load_dotenv
 
@@ -129,13 +139,13 @@ def sync_lead_to_github_repo(order_obj):
 def send_channel_notification(lead_data):
     """Отправка уведомления о заявке в канал 'Сайты под ключ' и администратору"""
     order_id = lead_data.get("id", "KM-1115")
-    name = lead_data.get("name", "Заказчик")
-    phone = lead_data.get("phone", "—")
-    district = lead_data.get("district", "Мариуполь")
-    item_type = lead_data.get("type", "Кухня на заказ")
-    material = lead_data.get("material", "Egger / Blum")
+    name = html.escape(str(lead_data.get("name", "Заказчик")))
+    phone = html.escape(str(lead_data.get("phone", "—")))
+    district = html.escape(str(lead_data.get("district", "Мариуполь")))
+    item_type = html.escape(str(lead_data.get("type", "Кухня на заказ")))
+    material = html.escape(str(lead_data.get("material", "Egger / Blum")))
     estimate = lead_data.get("amount", 165000)
-    username = lead_data.get("username", "")
+    username = html.escape(str(lead_data.get("username", "")))
     user_ref = f"@{username}" if username else "Не указан"
 
     html_text = (
@@ -206,8 +216,12 @@ def duplicate_lead_to_crm(lead_data):
         return "KM-1115"
 
 
-def get_main_menu():
+def get_main_menu(user_is_admin=False):
     markup = types.InlineKeyboardMarkup(row_width=1)
+    if user_is_admin:
+        markup.add(
+            types.InlineKeyboardButton("👑 Панель Администратора (CRM & Аналитика)", callback_data="admin_menu")
+        )
     markup.add(
         types.InlineKeyboardButton("🌐 Открыть сайт и 3D-каталог", url=WEBAPP_SITE_URL, web_app=types.WebAppInfo(url=WEBAPP_SITE_URL)),
         types.InlineKeyboardButton("🪚 Рассчитать стоимость мебели", callback_data="calc_start"),
@@ -229,7 +243,8 @@ def get_admin_keyboard():
         types.InlineKeyboardButton("📋 Свежие заявки из базы", callback_data="admin_recent_leads"),
         types.InlineKeyboardButton("💰 Сводка по производству", callback_data="admin_stats_summary"),
         types.InlineKeyboardButton("📢 Канал уведомлений @saitypodkluch", url="https://t.me/saitypodkluch"),
-        types.InlineKeyboardButton("🌐 Открыть сайт KorpusM", url=WEBAPP_SITE_URL, web_app=types.WebAppInfo(url=WEBAPP_SITE_URL))
+        types.InlineKeyboardButton("🌐 Открыть сайт KorpusM", url=WEBAPP_SITE_URL, web_app=types.WebAppInfo(url=WEBAPP_SITE_URL)),
+        types.InlineKeyboardButton("◀ Назад в главное меню", callback_data="main_menu")
     )
     return markup
 
@@ -250,27 +265,35 @@ def send_welcome(message):
     user_id = message.from_user.id
     user_sessions[chat_id] = {}
 
-    first_name = message.from_user.first_name or "Гость"
+    first_name = html.escape(message.from_user.first_name or "Гость")
     user_is_admin = is_admin(user_id)
     
     text = (
-        f"👋 Здравствуйте, **{first_name}**!\n\n"
-        "Вас приветствует мебельное производство **«Корпус М» (г. Мариуполь)**.\n\n"
+        f"👋 Здравствуйте, <b>{first_name}</b>!\n\n"
+        "Вас приветствует мебельное производство <b>«Корпус М» (г. Мариуполь)</b>.\n\n"
         "Мы проектируем и изготавливаем корпусную мебель по индивидуальным размерам:\n"
-        "✦ **Кухни на заказ** (МДФ Эмаль, Soft-Touch, Egger, Blum)\n"
-        "✦ **Шкафы-купе и гардеробные** под потолок\n"
-        "✦ **Прихожие, детские и мебель в ванную**\n"
-        "✦ **Мебель для кафе, магазинов и бизнеса**\n\n"
-        "📍 *Собственный цех в Мариуполе — честные цены без салонных наценок, доставка и монтаж под ключ.*\n\n"
+        "✦ <b>Кухни на заказ</b> (МДФ Эмаль, Soft-Touch, Egger, Blum)\n"
+        "✦ <b>Шкафы-купе и гардеробные</b> под потолок\n"
+        "✦ <b>Прихожие, детские и мебель в ванную</b>\n"
+        "✦ <b>Мебель для кафе, магазинов и бизнеса</b>\n\n"
+        "📍 <i>Собственный цех в Мариуполе — честные цены без салонных наценок, доставка и монтаж под ключ.</i>\n\n"
     )
     
     if user_is_admin:
-        text += "👑 **Вы авторизованы как Администратор.**\nДля входа в CRM и аналитику используйте кнопку ниже или команду /admin.\n\n"
+        text += "👑 <b>Вы авторизованы как Администратор.</b>\nДля входа в CRM и аналитику нажмите кнопку ниже или введите команду /admin.\n\n"
 
-    text += "Выберите действие ниже, чтобы рассчитать смету или вызвать мастера на бесплатный замер с образцами:"
+    text += "Выберите действие ниже:"
     
-    bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=get_reply_keyboard(user_is_admin))
-    bot.send_message(chat_id, "Меню действий:", reply_markup=get_main_menu())
+    try:
+        bot.send_message(
+            chat_id,
+            text,
+            parse_mode="HTML",
+            reply_markup=get_main_menu(user_is_admin)
+        )
+    except Exception as e:
+        logging.error(f"Error in send_welcome: {e}")
+        bot.send_message(chat_id, "Добро пожаловать в Корпус М Мариуполь!", reply_markup=get_main_menu(user_is_admin))
 
 
 @bot.message_handler(commands=['admin', 'crm', 'analytics', 'dashboard'])
@@ -299,9 +322,11 @@ def admin_panel_command(message):
     except Exception:
         pass
 
+    first_name = html.escape(message.from_user.first_name or "Администратор")
+
     text = (
         "👑 <b>ПАНЕЛЬ АДМИНИСТРАТОРА • КОРПУС М</b>\n\n"
-        f"Здравствуйте, <b>{message.from_user.first_name}</b>!\n\n"
+        f"Здравствуйте, <b>{first_name}</b>!\n\n"
         f"📊 <b>Статистика базы:</b>\n"
         f"• Всего заявок: <b>{total_leads}</b>\n"
         f"• Новых в очереди: <b>{new_leads}</b>\n"
@@ -327,19 +352,19 @@ def handle_menu_buttons(message):
 
     elif text == "📊 Войти в CRM":
         if not is_admin(user_id):
-            bot.reply_to(message, "🔒 Доступ к CRM цеха разрешен только Администратору и Мастеру.")
+            bot.reply_to(message, "🔒 Доступ к CRM цеха разрешен только Администратору и Мастеру.", parse_mode="HTML")
             return
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("📊 Открыть CRM-систему", url=WEBAPP_CRM_URL, web_app=types.WebAppInfo(url=WEBAPP_CRM_URL)))
-        bot.send_message(chat_id, "🔐 **CRM-система управления заказами KorpusM:**\n\nЛогин для входа: `admin` или `master`", parse_mode="Markdown", reply_markup=markup)
+        bot.send_message(chat_id, "🔐 <b>CRM-система управления заказами KorpusM:</b>\n\nЛогин для входа: <code>admin</code> или <code>master</code>", parse_mode="HTML", reply_markup=markup)
 
     elif text == "📈 Войти в Аналитику":
         if not is_admin(user_id):
-            bot.reply_to(message, "🔒 Финансовая аналитика доступна только Владельцу (Администратору).")
+            bot.reply_to(message, "🔒 Финансовая аналитика доступна только Владельцу (Администратору).", parse_mode="HTML")
             return
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("📈 Открыть Аналитический дашборд", url=WEBAPP_ANALYTICS_URL, web_app=types.WebAppInfo(url=WEBAPP_ANALYTICS_URL)))
-        bot.send_message(chat_id, "📈 **Аналитика продаж, воронка и загрузка цеха KorpusM:**", parse_mode="Markdown", reply_markup=markup)
+        bot.send_message(chat_id, "📈 <b>Аналитика продаж, воронка и загрузка цеха KorpusM:</b>", parse_mode="HTML", reply_markup=markup)
 
     elif text == "🪚 Рассчитать мебель":
         markup = types.InlineKeyboardMarkup(row_width=1)
@@ -350,14 +375,14 @@ def handle_menu_buttons(message):
             types.InlineKeyboardButton("☕ Мебель для бизнеса / Офис", callback_data="calc_type_commercial"),
             types.InlineKeyboardButton("◀ Назад в меню", callback_data="main_menu")
         )
-        bot.send_message(chat_id, "🪚 **Шаг 1 из 3:** Выберите тип мебели для расчета стоимости:", parse_mode="Markdown", reply_markup=markup)
+        bot.send_message(chat_id, "🪚 <b>Шаг 1 из 3:</b> Выберите тип мебели для расчета стоимости:", parse_mode="HTML", reply_markup=markup)
 
     elif text == "📐 Записаться на замер":
         markup = types.InlineKeyboardMarkup(row_width=1)
         for dist in DISTRICTS:
             markup.add(types.InlineKeyboardButton(f"📍 {dist}", callback_data=f"dist_{dist}"))
         markup.add(types.InlineKeyboardButton("◀ В главное меню", callback_data="main_menu"))
-        bot.send_message(chat_id, "📐 **Бесплатный выезд мастера на замер по Мариуполю:**\n\nВ каком **районе Мариуполя** находится ваш объект?", parse_mode="Markdown", reply_markup=markup)
+        bot.send_message(chat_id, "📐 <b>Бесплатный выезд мастера на замер по Мариуполю:</b>\n\nВ каком <b>районе Мариуполя</b> находится ваш объект?", parse_mode="HTML", reply_markup=markup)
 
     elif text == "📁 Портфолио цеха":
         markup = types.InlineKeyboardMarkup(row_width=1)
@@ -365,18 +390,18 @@ def handle_menu_buttons(message):
             types.InlineKeyboardButton("🌐 Смотреть всё портфолио на сайте", url=WEBAPP_SITE_URL + "#portfolio", web_app=types.WebAppInfo(url=WEBAPP_SITE_URL + "#portfolio")),
             types.InlineKeyboardButton("🪚 Рассчитать стоимость", callback_data="calc_start")
         )
-        bot.send_message(chat_id, "📸 **Живое портфолио мебельного цеха «Корпус М» (Мариуполь):**\nБолее 480+ фото и видеообзоров на сайте!", parse_mode="Markdown", reply_markup=markup)
+        bot.send_message(chat_id, "📸 <b>Живое портфолио мебельного цеха «Корпус М» (Мариуполь):</b>\nБолее 480+ фото и видеообзоров на сайте!", parse_mode="HTML", reply_markup=markup)
 
     elif text == "📞 Контакты мастера":
         bot.send_message(
             chat_id,
-            f"📞 **Контакты основателя и мастера Евгения Йулдашова:**\n\n"
-            f"• Телефон: **{PHONE_NUMBER}**\n"
+            f"📞 <b>Контакты основателя и мастера Евгения Йулдашова:</b>\n\n"
+            f"• Телефон: <b>{PHONE_NUMBER}</b>\n"
             "• Telegram: @Denver949\n"
             "• Канал с отчётами: @korpus_m_admin_bot\n"
             "• Цех: г. Мариуполь (работаем по всему городу и пригороду)\n\n"
             "Пн–Сб с 9:00 до 19:00",
-            parse_mode="Markdown"
+            parse_mode="HTML"
         )
 
 
@@ -384,6 +409,7 @@ def handle_menu_buttons(message):
 def callback_handler(call):
     chat_id = call.message.chat.id
     user_id = call.from_user.id
+    user_is_admin = is_admin(user_id)
     if chat_id not in user_sessions:
         user_sessions[chat_id] = {}
 
@@ -392,17 +418,17 @@ def callback_handler(call):
     if data == "main_menu":
         bot.answer_callback_query(call.id)
         bot.edit_message_text(
-            "Главное меню мебельного производства **«Корпус М» (Мариуполь)**:",
+            "Главное меню мебельного производства <b>«Корпус М» (Мариуполь)</b>:",
             chat_id=chat_id,
             message_id=call.message.message_id,
-            parse_mode="Markdown",
-            reply_markup=get_main_menu()
+            parse_mode="HTML",
+            reply_markup=get_main_menu(user_is_admin)
         )
 
     elif data == "admin_menu":
         bot.answer_callback_query(call.id)
-        if not is_admin(user_id):
-            bot.send_message(chat_id, "⛔ Доступ к панели администратора разрешен только руководству.")
+        if not user_is_admin:
+            bot.send_message(chat_id, "⛔ Доступ к панели администратора разрешен только руководству.", parse_mode="HTML")
             return
         bot.edit_message_text(
             "👑 <b>Панель Администратора KorpusM:</b>",
@@ -414,8 +440,8 @@ def callback_handler(call):
 
     elif data == "admin_recent_leads":
         bot.answer_callback_query(call.id)
-        if not is_admin(user_id):
-            bot.send_message(chat_id, "⛔ Доступ ограничен.")
+        if not user_is_admin:
+            bot.send_message(chat_id, "⛔ Доступ ограничен.", parse_mode="HTML")
             return
         
         conn = sqlite3.connect(DB_PATH)
@@ -425,18 +451,22 @@ def callback_handler(call):
         conn.close()
 
         if not rows:
-            bot.send_message(chat_id, "📭 В базе пока нет заявок.")
+            bot.send_message(chat_id, "📭 В базе пока нет заявок.", parse_mode="HTML")
             return
 
         text = "📋 <b>Последние заявки из базы:</b>\n\n"
         for r in rows:
             st_icon = "🟡" if r[7] == "Новая" else "⚙️"
+            c_name = html.escape(str(r[2]))
+            c_phone = html.escape(str(r[3]))
+            c_type = html.escape(str(r[4]))
+            c_dist = html.escape(str(r[6]))
             text += (
                 f"{st_icon} <b>Заказ #KM-{r[0]}</b> ({r[1]})\n"
-                f"👤 Клиент: {r[2]}\n"
-                f"📞 Телефон: <code>{r[3]}</code>\n"
-                f"🪑 Изделие: {r[4]}\n"
-                f"📍 Район: {r[6]}\n"
+                f"👤 Клиент: {c_name}\n"
+                f"📞 Телефон: <code>{c_phone}</code>\n"
+                f"🪑 Изделие: {c_type}\n"
+                f"📍 Район: {c_dist}\n"
                 f"💰 Оценка: {r[5]:,} ₽\n\n"
             )
         markup = types.InlineKeyboardMarkup(row_width=1)
@@ -448,8 +478,8 @@ def callback_handler(call):
 
     elif data == "admin_stats_summary":
         bot.answer_callback_query(call.id)
-        if not is_admin(user_id):
-            bot.send_message(chat_id, "⛔ Доступ ограничен.")
+        if not user_is_admin:
+            bot.send_message(chat_id, "⛔ Доступ ограничен.", parse_mode="HTML")
             return
 
         conn = sqlite3.connect(DB_PATH)
@@ -481,10 +511,10 @@ def callback_handler(call):
         bot.answer_callback_query(call.id)
         bot.send_message(
             chat_id,
-            f"📞 **Прямой контакт мастера Евгения (Корпус М Мариуполь):**\n\n"
-            f"**{PHONE_NUMBER}**\n\n"
+            f"📞 <b>Прямой контакт мастера Евгения (Корпус М Мариуполь):</b>\n\n"
+            f"<b>{PHONE_NUMBER}</b>\n\n"
             "Звоните в любое удобное время (Пн–Сб с 9:00 до 19:00)!",
-            parse_mode="Markdown"
+            parse_mode="HTML"
         )
 
     elif data == "calc_start":
@@ -497,8 +527,8 @@ def callback_handler(call):
             types.InlineKeyboardButton("☕ Мебель для бизнеса / Офис", callback_data="calc_type_commercial"),
             types.InlineKeyboardButton("◀ Назад в меню", callback_data="main_menu")
         )
-        text = "🪚 **Шаг 1 из 3:** Выберите тип мебели для расчета стоимости:"
-        bot.edit_message_text(text, chat_id=chat_id, message_id=call.message.message_id, parse_mode="Markdown", reply_markup=markup)
+        text = "🪚 <b>Шаг 1 из 3:</b> Выберите тип мебели для расчета стоимости:"
+        bot.edit_message_text(text, chat_id=chat_id, message_id=call.message.message_id, parse_mode="HTML", reply_markup=markup)
 
     elif data.startswith("calc_type_"):
         bot.answer_callback_query(call.id)
@@ -519,8 +549,9 @@ def callback_handler(call):
             types.InlineKeyboardButton("Более 4.5 м / Индивидуальный проект", callback_data="calc_len_5.0"),
             types.InlineKeyboardButton("◀ Назад", callback_data="calc_start")
         )
-        text = f"📏 **Шаг 2 из 3:** Укажите ориентировочную длину мебели ({user_sessions[chat_id]['item_type']}):"
-        bot.edit_message_text(text, chat_id=chat_id, message_id=call.message.message_id, parse_mode="Markdown", reply_markup=markup)
+        cur_type = html.escape(user_sessions[chat_id]['item_type'])
+        text = f"📏 <b>Шаг 2 из 3:</b> Укажите ориентировочную длину мебели ({cur_type}):"
+        bot.edit_message_text(text, chat_id=chat_id, message_id=call.message.message_id, parse_mode="HTML", reply_markup=markup)
 
     elif data.startswith("calc_len_"):
         bot.answer_callback_query(call.id)
@@ -534,8 +565,8 @@ def callback_handler(call):
             types.InlineKeyboardButton("✦ Шпон дуба / Черный профиль / Кварц (Люкс)", callback_data="calc_mat_luxury"),
             types.InlineKeyboardButton("◀ Назад", callback_data="calc_start")
         )
-        text = "🔩 **Шаг 3 из 3:** Выберите класс фасадов и фурнитуры:"
-        bot.edit_message_text(text, chat_id=chat_id, message_id=call.message.message_id, parse_mode="Markdown", reply_markup=markup)
+        text = "🔩 <b>Шаг 3 из 3:</b> Выберите класс фасадов и фурнитуры:"
+        bot.edit_message_text(text, chat_id=chat_id, message_id=call.message.message_id, parse_mode="HTML", reply_markup=markup)
 
     elif data.startswith("calc_mat_"):
         bot.answer_callback_query(call.id)
@@ -562,16 +593,16 @@ def callback_handler(call):
         )
 
         res_text = (
-            f"🎉 **Предварительный расчет готов!**\n\n"
-            f"🪑 **Изделие:** {item_type}\n"
-            f"📏 **Длина:** {length_val} м\n"
-            f"🔩 **Материалы:** {mat_name}\n"
-            f"💰 **Ориентировочная смета:** ~ **{estimate:,} ₽**\n\n"
+            f"🎉 <b>Предварительный расчет готов!</b>\n\n"
+            f"🪑 <b>Изделие:</b> {html.escape(item_type)}\n"
+            f"📏 <b>Длина:</b> {length_val} м\n"
+            f"🔩 <b>Материалы:</b> {html.escape(mat_name)}\n"
+            f"💰 <b>Ориентировочная смета:</b> ~ <b>{estimate:,} ₽</b>\n\n"
             "✓ В стоимость включены: 3D-визуализация, распил на ЧПУ, кромление PUR-клеем, доставка и монтаж под ключ в Мариуполе.\n\n"
-            "Напишите ваш **номер телефона и имя** (+7 949 ...), чтобы зафиксировать скидку 10% на материалы и забронировать замер:"
+            "Напишите ваш <b>номер телефона и имя</b> (+7 949 ...), чтобы зафиксировать скидку 10% на материалы и забронировать замер:"
         ).replace(",", " ")
 
-        bot.edit_message_text(res_text, chat_id=chat_id, message_id=call.message.message_id, parse_mode="Markdown", reply_markup=markup)
+        bot.edit_message_text(res_text, chat_id=chat_id, message_id=call.message.message_id, parse_mode="HTML", reply_markup=markup)
 
     elif data == "measure_start":
         bot.answer_callback_query(call.id)
@@ -581,11 +612,11 @@ def callback_handler(call):
         markup.add(types.InlineKeyboardButton("◀ В главное меню", callback_data="main_menu"))
 
         text = (
-            "📐 **Бесплатный выезд мастера на замер по Мариуполю:**\n\n"
+            "📐 <b>Бесплатный выезд мастера на замер по Мариуполю:</b>\n\n"
             "Мастер Евгений приедет с лазерным дальномером и чемоданом образцов (фасады Egger, МДФ, палитра RAL, фурнитура Blum).\n\n"
-            "В каком **районе Мариуполя** находится ваш объект?"
+            "В каком <b>районе Мариуполя</b> находится ваш объект?"
         )
-        bot.edit_message_text(text, chat_id=chat_id, message_id=call.message.message_id, parse_mode="Markdown", reply_markup=markup)
+        bot.edit_message_text(text, chat_id=chat_id, message_id=call.message.message_id, parse_mode="HTML", reply_markup=markup)
 
     elif data.startswith("dist_"):
         bot.answer_callback_query(call.id)
@@ -593,10 +624,10 @@ def callback_handler(call):
         user_sessions[chat_id]["district"] = district
 
         text = (
-            f"📍 **Район выбран:** {district}\n\n"
-            "Напишите ваш **номер телефона и имя** (+7 949 ...) для согласования удобного дня и времени замера:"
+            f"📍 <b>Район выбран:</b> {html.escape(district)}\n\n"
+            "Напишите ваш <b>номер телефона и имя</b> (+7 949 ...) для согласования удобного дня и времени замера:"
         )
-        bot.edit_message_text(text, chat_id=chat_id, message_id=call.message.message_id, parse_mode="Markdown")
+        bot.edit_message_text(text, chat_id=chat_id, message_id=call.message.message_id, parse_mode="HTML")
 
     elif data == "portfolio_show":
         bot.answer_callback_query(call.id)
@@ -607,15 +638,15 @@ def callback_handler(call):
             types.InlineKeyboardButton("◀ Назад в меню", callback_data="main_menu")
         )
         text = (
-            "📸 **Живое портфолио мебельного цеха «Корпус М»:**\n\n"
-            "• **Кухня Графит & Дуб Натуральный** (пр. Металлургов) — 210 000 ₽\n"
-            "• **Кухня Белый мат Soft-Touch & LED** (пр. Мира) — 185 000 ₽\n"
-            "• **Прихожая под потолок с ростовым зеркалом** (ул. Нахимова) — 95 000 ₽\n"
-            "• **Зеркальный шкаф-купе в нишу** (бульвар Шевченко) — 75 000 ₽\n"
-            "• **Торговая мебель и барная стойка STARCOFF** — 340 000 ₽\n\n"
+            "📸 <b>Живое портфолио мебельного цеха «Корпус М»:</b>\n\n"
+            "• <b>Кухня Графит & Дуб Натуральный</b> (пр. Металлургов) — 210 000 ₽\n"
+            "• <b>Кухня Белый мат Soft-Touch & LED</b> (пр. Мира) — 185 000 ₽\n"
+            "• <b>Прихожая под потолок с ростовым зеркалом</b> (ул. Нахимова) — 95 000 ₽\n"
+            "• <b>Зеркальный шкаф-купе в нишу</b> (бульвар Шевченко) — 75 000 ₽\n"
+            "• <b>Торговая мебель и барная стойка STARCOFF</b> — 340 000 ₽\n\n"
             "Все фото в высоком разрешении и видеообзоры доступны на сайте!"
         )
-        bot.edit_message_text(text, chat_id=chat_id, message_id=call.message.message_id, parse_mode="Markdown", reply_markup=markup)
+        bot.edit_message_text(text, chat_id=chat_id, message_id=call.message.message_id, parse_mode="HTML", reply_markup=markup)
 
     elif data == "reviews_show":
         bot.answer_callback_query(call.id)
@@ -625,15 +656,15 @@ def callback_handler(call):
             types.InlineKeyboardButton("◀ Назад в меню", callback_data="main_menu")
         )
         text = (
-            "⭐ **Отзывы наших заказчиков (Мариуполь):**\n\n"
-            "🗣 **Ольга (пр. Мира):**\n"
+            "⭐ <b>Отзывы наших заказчиков (Мариуполь):</b>\n\n"
+            "🗣 <b>Ольга (пр. Мира):</b>\n"
             "«Заказывали кухню под потолок. Сделали за 18 дней, петли Blum работают идеально плавно, ни одного зазора. Спасибо мастеру Евгению!»\n\n"
-            "🗣 **Артем (Левобережный):**\n"
+            "🗣 <b>Артем (Левобережный):</b>\n"
             "«Отличный шкаф-купе и гардеробная. Цены в 1.5 раза приятнее, чем в салонах города, так как работают напрямую из цеха.»\n\n"
-            "🗣 **Виктория (Приморский):**\n"
+            "🗣 <b>Виктория (Приморский):</b>\n"
             "«Идеально спрятали бойлер и трубы в санузле специальным влагостойким шкафом. Очень довольны!»"
         )
-        bot.edit_message_text(text, chat_id=chat_id, message_id=call.message.message_id, parse_mode="Markdown", reply_markup=markup)
+        bot.edit_message_text(text, chat_id=chat_id, message_id=call.message.message_id, parse_mode="HTML", reply_markup=markup)
 
 
 # Message handler for capturing contact phone numbers & names
@@ -686,9 +717,9 @@ def handle_text(message):
     send_channel_notification(lead_dict)
 
     confirm_text = (
-        f"✅ **Спасибо, {client_name}! Ваша заявка #{crm_order_id} принята.**\n\n"
-        f"Мастер Евгений свяжется с вами по номеру `{text}` в течение 5–10 минут для уточнения деталей и времени замера.\n\n"
-        f"📞 Если хотите позвонить прямо сейчас:\n**{PHONE_NUMBER}**"
+        f"✅ <b>Спасибо, {html.escape(client_name)}! Ваша заявка #{crm_order_id} принята.</b>\n\n"
+        f"Мастер Евгений свяжется с вами по номеру <code>{html.escape(text)}</code> в течение 5–10 минут для уточнения деталей и времени замера.\n\n"
+        f"📞 Если хотите позвонить прямо сейчас:\n<b>{PHONE_NUMBER}</b>"
     )
 
     markup = types.InlineKeyboardMarkup()
@@ -697,9 +728,9 @@ def handle_text(message):
         types.InlineKeyboardButton("◀ В главное меню", callback_data="main_menu")
     )
 
-    bot.send_message(chat_id, confirm_text, parse_mode="Markdown", reply_markup=markup)
+    bot.send_message(chat_id, confirm_text, parse_mode="HTML", reply_markup=markup)
 
 
 if __name__ == "__main__":
-    logging.info("🪵 Korpus M Telegram Bot (@korpus_m_admin_bot) started polling...")
+    logging.info("🪵 Korpus M Telegram Bot (@korpus_m_admin_bot) started polling with IPv4 & Admin Panel...")
     bot.infinity_polling(timeout=20, long_polling_timeout=10)
