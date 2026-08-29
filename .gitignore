@@ -3,8 +3,8 @@ node_modules/
 *.log
 .DS_Store
 Thumbs.db
-portfolio/
-assets/videos/
-*.mp4
-*.MOV
-*.mov
+__pycache__/
+*.pyc
+portfolio/**/drugie_raboty_avtora/*.mp4
+portfolio/**/drugie_raboty_avtora/*.MOV
+portfolio/**/drugie_raboty_avtora/*.mov
