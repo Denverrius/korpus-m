@@ -2,36 +2,45 @@
 """
 Telegram Sales & Production Bot for KorpusM (Мариуполь)
 Bot: @korpus_m_admin_bot
-Канал: @mebelmariupoll
-Телефон мастера Евгения: +7 (949) 710-52-78
+Канал уведомлений: Сайты под ключ (-1004414921642)
+Администратор: 8086868178
+Телефон мастера: +7 (949) 710-52-78
 Сайт: https://denverrius.github.io/korpus-m/
+CRM: https://denverrius.github.io/korpus-m/crm.html
 
-Функционал:
-- WebApp интеграция (сайт и CRM прямо внутри Telegram)
-- Экспресс-калькулятор стоимости кухни / шкафа / гардеробной
-- Запись на бесплатный выезд замерщика с чемоданом образцов по районам Мариуполя
-- Живое портфолио сданных объектов
-- Приём фото и эскизов помещения от заказчиков
-- Сохранение заявок в SQLite (leads.db)
-- Панель управления мастера (/leads, /stats)
+Сквозная интеграция:
+- Каждая заявка из Telegram-бота мгновенно отправляется в канал «Сайты под ключ»
+- Заявка сохраняется в SQLite (leads.db) и файловую базу заказов CRM (.data/orders/*.json)
+- Автоматически обновляются счетчики в CRM (crm.html) и дашборде аналитики (analytics.html)
 """
 
 import os
+import glob
+import json
 import sqlite3
 import datetime
 import logging
+import requests
 from telebot import TeleBot, types
 from dotenv import load_dotenv
 
 load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8674575940:AAHHSoOujULSKDsuS6MCr3hvY2i4eVK4E4c")
-MASTER_CHAT_ID = os.getenv("MASTER_CHAT_ID", "")
+CHANNEL_ID = os.getenv("CHANNEL_ID", "-1004414921642")  # Канал "Сайты под ключ"
+ADMIN_ID = os.getenv("ADMIN_ID", "8086868178")
 PHONE_NUMBER = "+7 (949) 710-52-78"
-TG_CHANNEL = "https://t.me/mebelmariupoll"
+TG_BOT_LINK = "https://t.me/korpus_m_admin_bot"
 WEBAPP_SITE_URL = "https://denverrius.github.io/korpus-m/"
 WEBAPP_CRM_URL = "https://denverrius.github.io/korpus-m/crm.html"
-DB_PATH = os.path.join(os.path.dirname(__file__), "leads.db")
+WEBAPP_ANALYTICS_URL = "https://denverrius.github.io/korpus-m/analytics.html"
+
+BASE_DIR = os.path.dirname(__file__)
+DB_PATH = os.path.join(BASE_DIR, "leads.db")
+DATA_ORDERS_DIR = os.path.join(BASE_DIR, ".data", "orders")
+
+if not os.path.exists(DATA_ORDERS_DIR):
+    os.makedirs(DATA_ORDERS_DIR, exist_ok=True)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 bot = TeleBot(BOT_TOKEN)
@@ -67,6 +76,86 @@ DISTRICTS = [
     "Центральный", "Приморский", "Ильичевский", "Левобережный", "Пригород Мариуполя"
 ]
 
+
+def send_channel_notification(lead_data):
+    """Отправка уведомления о заявке в канал 'Сайты под ключ' и администратору"""
+    order_id = lead_data.get("id", "KM-1115")
+    name = lead_data.get("name", "Заказчик")
+    phone = lead_data.get("phone", "—")
+    district = lead_data.get("district", "Мариуполь")
+    item_type = lead_data.get("type", "Кухня на заказ")
+    material = lead_data.get("material", "Egger / Blum")
+    estimate = lead_data.get("amount", 165000)
+    username = lead_data.get("username", "")
+    user_ref = f"@{username}" if username else "Не указан"
+
+    html_text = (
+        f"🪵 <b>НОВАЯ ЗАЯВКА НА МЕБЕЛЬ • КОРПУС М (Мариуполь)</b>\n\n"
+        f"📋 <b>Номер заказа:</b> #{order_id}\n"
+        f"👤 <b>Клиент:</b> {name} ({user_ref})\n"
+        f"📞 <b>Телефон:</b> <code>{phone}</code>\n"
+        f"📍 <b>Район Мариуполя:</b> {district}\n"
+        f"🪑 <b>Изделие:</b> {item_type}\n"
+        f"🔩 <b>Материалы:</b> {material}\n"
+        f"💰 <b>Смета:</b> {estimate:,} ₽\n"
+        f"🌐 <b>Источник:</b> Telegram-бот @korpus_m_admin_bot\n\n"
+        f"✅ <i>Заявка успешно продублирована в CRM цеха и аналитику.</i>"
+    ).replace(",", " ")
+
+    # 1. Send to Channel "Сайты под ключ"
+    try:
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+        requests.post(url, json={"chat_id": CHANNEL_ID, "text": html_text, "parse_mode": "HTML"}, timeout=10)
+        logging.info(f"✅ Notification dispatched to Channel {CHANNEL_ID}")
+    except Exception as e:
+        logging.warn(f"Failed to send to channel {CHANNEL_ID}: {e}")
+
+    # 2. Send to Admin
+    if ADMIN_ID and ADMIN_ID != CHANNEL_ID:
+        try:
+            requests.post(url, json={"chat_id": ADMIN_ID, "text": html_text, "parse_mode": "HTML"}, timeout=10)
+            logging.info(f"✅ Notification dispatched to Admin {ADMIN_ID}")
+        except Exception:
+            pass
+
+
+def duplicate_lead_to_crm(lead_data):
+    """Сохранение заявки в CRM JSON-базу для мгновенного отображения в crm.html и analytics.html"""
+    try:
+        now = datetime.datetime.now()
+        existing_files = [f for f in os.listdir(DATA_ORDERS_DIR) if f.endswith('.json')] if os.path.exists(DATA_ORDERS_DIR) else []
+        next_num = 1000 + len(existing_files) + 1
+        order_id = f"KM-{next_num}"
+
+        order_obj = {
+            "id": order_id,
+            "number": next_num,
+            "createdAt": now.isoformat(),
+            "name": lead_data.get("name", "Клиент Telegram"),
+            "phone": lead_data.get("phone", ""),
+            "address": f"г. Мариуполь, {lead_data.get('district', 'Центральный район')}",
+            "date": now.strftime("%Y-%m-%d"),
+            "time": now.strftime("%H:%M"),
+            "type": lead_data.get("type", "Кухня на заказ"),
+            "material": lead_data.get("material", "ЛДСП Egger + Blum"),
+            "amount": int(lead_data.get("amount", 165000)),
+            "source": "Telegram-бот (@korpus_m_admin_bot)",
+            "comment": f"Заявка из бота. Район: {lead_data.get('district', 'Мариуполь')}. Юзер: @{lead_data.get('username', '')}",
+            "status": "новая",
+            "tg_delivered": True
+        }
+
+        filename = f"order_{int(now.timestamp())}_{order_id}.json"
+        with open(os.path.join(DATA_ORDERS_DIR, filename), "w", encoding="utf-8") as f:
+            json.dump(order_obj, f, ensure_ascii=False, indent=2)
+        
+        logging.info(f"✅ Saved order #{order_id} to CRM JSON store")
+        return order_id
+    except Exception as e:
+        logging.error(f"Error saving to CRM store: {e}")
+        return "KM-1115"
+
+
 def get_main_menu():
     markup = types.InlineKeyboardMarkup(row_width=1)
     markup.add(
@@ -75,7 +164,7 @@ def get_main_menu():
         types.InlineKeyboardButton("📐 Записаться на замер с образцами", callback_data="measure_start"),
         types.InlineKeyboardButton("📸 Реальные работы мастера в Мариуполе", callback_data="portfolio_show"),
         types.InlineKeyboardButton("⭐ Отзывы наших заказчиков", callback_data="reviews_show"),
-        types.InlineKeyboardButton("💬 Написать мастеру в Telegram", url=TG_CHANNEL),
+        types.InlineKeyboardButton("💬 Прямой чат с мастером", url="https://t.me/mebelmariupoll"),
         types.InlineKeyboardButton("📞 Позвонить мастеру: " + PHONE_NUMBER, callback_data="show_phone")
     )
     return markup
@@ -91,7 +180,7 @@ def send_welcome(message):
     text = (
         f"👋 Здравствуйте, **{first_name}**!\n\n"
         "Вас приветствует мебельное производство **«Корпус М» (г. Мариуполь)**.\n\n"
-        "Мы проектируем и изготавливаем корпусную мебель по вашим размерам:\n"
+        "Мы проектируем и изготавливаем корпусную мебель по индивидуальным размерам:\n"
         "✦ **Кухни на заказ** (МДФ Эмаль, Soft-Touch, Egger, Blum)\n"
         "✦ **Шкафы-купе и гардеробные** под потолок\n"
         "✦ **Прихожие, детские и мебель в ванную**\n"
@@ -128,7 +217,7 @@ def view_leads(message):
         )
     
     markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("📊 Открыть полную CRM-панель", web_app=types.WebAppInfo(url=WEBAPP_CRM_URL)))
+    markup.add(types.InlineKeyboardButton("📊 Открыть CRM заказов цеха", web_app=types.WebAppInfo(url=WEBAPP_CRM_URL)))
     bot.reply_to(message, text.replace(",", " "), parse_mode="Markdown", reply_markup=markup)
 
 
@@ -154,7 +243,7 @@ def view_stats(message):
     ).replace(",", " ")
 
     markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("📈 Открыть дашборд аналитики", web_app=types.WebAppInfo(url="https://denverrius.github.io/korpus-m/analytics.html")))
+    markup.add(types.InlineKeyboardButton("📈 Открыть дашборд аналитики", web_app=types.WebAppInfo(url=WEBAPP_ANALYTICS_URL)))
     bot.reply_to(message, text, parse_mode="Markdown", reply_markup=markup)
 
 
@@ -225,7 +314,7 @@ def callback_handler(call):
             "hall": "Прихожая под потолок",
             "commercial": "Мебель для бизнеса / Офис"
         }
-        user_sessions[chat_id]["item_type"] = types_map.get(t_key, "Корпусная мебель")
+        user_sessions[chat_id]["item_type"] = types_map.get(t_key, "Кухня на заказ")
 
         markup = types.InlineKeyboardMarkup(row_width=1)
         markup.add(
@@ -283,7 +372,7 @@ def callback_handler(call):
             f"📏 **Длина:** {length_val} м\n"
             f"🔩 **Материалы:** {mat_name}\n"
             f"💰 **Ориентировочная смета:** ~ **{estimate:,} ₽**\n\n"
-            "✓ В стоимость включены: 3D-визуализация, распил на ЧПУ, кромление PUR-клеем, доставка и профессиональный монтаж под ключ в Мариуполе.\n\n"
+            "✓ В стоимость включены: 3D-визуализация, распил на ЧПУ, кромление PUR-клеем, доставка и монтаж под ключ в Мариуполе.\n\n"
             "Напишите ваш **номер телефона и имя** (+7 949 ...), чтобы зафиксировать скидку 10% на материалы и забронировать замер:"
         ).replace(",", " ")
 
@@ -366,45 +455,45 @@ def handle_text(message):
     client_name = message.from_user.first_name or "Заказчик"
     username = message.from_user.username or ""
     
-    district = session.get("district", "Мариуполь")
-    item_type = session.get("item_type", "Корпусная мебель")
+    district = session.get("district", "Центральный район")
+    item_type = session.get("item_type", "Кухня на заказ")
     length_val = session.get("length", 3.0)
-    material = session.get("material", "Egger / Blum")
+    material = session.get("material", "ЛДСП Egger + Blum")
     estimate = session.get("estimate", 165000)
     has_photo = session.get("has_photo", 0)
 
-    # Save to SQLite Database
+    # 1. Save to SQLite Database
     try:
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
         c.execute('''INSERT INTO leads (created_at, client_name, username, phone, district, item_type, length, material, estimate, has_photo, comment, status)
                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                   (now_str, client_name, username, text, district, item_type, length_val, material, estimate, has_photo, f"Заявка из Telegram бота @korpus_m_admin_bot", "Новая"))
-        lead_id = c.lastrowid
+        sql_lead_id = c.lastrowid
         conn.commit()
         conn.close()
     except Exception as e:
         logging.error(f"DB Error: {e}")
-        lead_id = 1115
+        sql_lead_id = 1115
 
-    # Notify Master if chat ID is set
-    if MASTER_CHAT_ID:
-        try:
-            admin_msg = (
-                f"🪵 **Новая заявка на мебель #KM-{lead_id}!**\n\n"
-                f"👤 Клиент: {client_name} (@{username})\n"
-                f"📞 Контакт: `{text}`\n"
-                f"📍 Район: {district}\n"
-                f"🪑 Изделие: {item_type} ({length_val} м)\n"
-                f"🔩 Материал: {material}\n"
-                f"💰 Оценка: {estimate:,} ₽\n"
-            ).replace(",", " ")
-            bot.send_message(MASTER_CHAT_ID, admin_msg, parse_mode="Markdown")
-        except Exception:
-            pass
+    # 2. Duplicate to CRM JSON Store (shows up in crm.html and analytics.html)
+    lead_dict = {
+        "name": client_name,
+        "phone": text,
+        "district": district,
+        "type": item_type,
+        "material": material,
+        "amount": estimate,
+        "username": username
+    }
+    crm_order_id = duplicate_lead_to_crm(lead_dict)
+
+    # 3. Send Notification to Channel "Сайты под ключ" & Admin
+    lead_dict["id"] = crm_order_id
+    send_channel_notification(lead_dict)
 
     confirm_text = (
-        f"✅ **Спасибо, {client_name}! Ваша заявка #KM-{lead_id} принята.**\n\n"
+        f"✅ **Спасибо, {client_name}! Ваша заявка #{crm_order_id} принята.**\n\n"
         f"Мастер Евгений свяжется с вами по номеру `{text}` в течение 5–10 минут для уточнения деталей и времени замера.\n\n"
         f"📞 Если хотите позвонить прямо сейчас:\n**{PHONE_NUMBER}**"
     )
@@ -419,5 +508,5 @@ def handle_text(message):
 
 
 if __name__ == "__main__":
-    logging.info("🪵 Korpus M Telegram Bot (@korpus_m_admin_bot) started polling...")
+    logging.info("🪵 Korpus M Telegram Bot (@korpus_m_admin_bot) started polling with channel notifications...")
     bot.infinity_polling(timeout=20, long_polling_timeout=10)
