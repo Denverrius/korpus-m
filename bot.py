@@ -39,8 +39,9 @@ load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8674575940:AAFICozyuZjPy0PNAOeR5hR7gTPgP4Q7gB0")
 CHANNEL_ID = os.getenv("CHANNEL_ID", "@saitypodkluch")
-ADMIN_ID = os.getenv("ADMIN_ID", "8086868178")
-ADMIN_IDS = [str(ADMIN_ID), "8086868178"]
+
+ADMIN_USERNAMES = {"den_dev82", "denver949", "denver_test", "illnass777", "maksim_rest", "den_dev", "denver"}
+ADMIN_IDS = {"8086868178", str(os.getenv("ADMIN_ID", "8086868178"))}
 
 PHONE_NUMBER = "+7 (949) 710-52-78"
 TG_BOT_LINK = "https://t.me/korpus_m_admin_bot"
@@ -59,9 +60,15 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 bot = TeleBot(BOT_TOKEN)
 
 
-def is_admin(user_id):
-    """Проверка прав администратора"""
-    return str(user_id) in ADMIN_IDS or str(user_id) == str(ADMIN_ID)
+def is_admin(user_id=None, username=None):
+    """Проверка прав администратора по Telegram ID или юзернейму"""
+    if user_id and str(user_id) in ADMIN_IDS:
+        return True
+    if username:
+        clean_u = str(username).strip().lstrip('@').lower()
+        if clean_u in ADMIN_USERNAMES:
+            return True
+    return False
 
 
 def init_db():
@@ -175,10 +182,9 @@ def send_channel_notification(lead_data):
         logging.warn(f"Failed to send to channel {CHANNEL_ID}: {e}")
 
     # Send to Admin
-    if ADMIN_ID and ADMIN_ID != CHANNEL_ID:
+    for adm in ADMIN_IDS:
         try:
-            requests.post(url, json={"chat_id": ADMIN_ID, "text": html_text, "parse_mode": "HTML"}, timeout=10)
-            logging.info(f"✅ Notification dispatched to Admin {ADMIN_ID}")
+            requests.post(url, json={"chat_id": adm, "text": html_text, "parse_mode": "HTML"}, timeout=10)
         except Exception:
             pass
 
@@ -225,7 +231,9 @@ def get_main_menu(user_is_admin=False):
     markup = types.InlineKeyboardMarkup(row_width=1)
     if user_is_admin:
         markup.add(
-            types.InlineKeyboardButton("👑 Панель Администратора (CRM & Аналитика)", callback_data="admin_menu")
+            types.InlineKeyboardButton("👑 Панель Администратора (CRM & Аналитика)", callback_data="admin_menu"),
+            types.InlineKeyboardButton("📊 Вход в CRM-систему", url=WEBAPP_CRM_URL, web_app=types.WebAppInfo(url=WEBAPP_CRM_URL)),
+            types.InlineKeyboardButton("📈 Вход в Аналитику", url=WEBAPP_ANALYTICS_URL, web_app=types.WebAppInfo(url=WEBAPP_ANALYTICS_URL))
         )
     markup.add(
         types.InlineKeyboardButton("🌐 Открыть сайт и 3D-каталог", url=WEBAPP_SITE_URL, web_app=types.WebAppInfo(url=WEBAPP_SITE_URL)),
@@ -249,7 +257,7 @@ def get_admin_keyboard():
         types.InlineKeyboardButton("💰 Сводка по производству", callback_data="admin_stats_summary"),
         types.InlineKeyboardButton("📢 Канал уведомлений @saitypodkluch", url="https://t.me/saitypodkluch"),
         types.InlineKeyboardButton("🌐 Открыть сайт KorpusM", url=WEBAPP_SITE_URL, web_app=types.WebAppInfo(url=WEBAPP_SITE_URL)),
-        types.InlineKeyboardButton("◀ Назад в главное меню", callback_data="main_menu")
+        types.InlineKeyboardButton("◀ В главное меню", callback_data="main_menu")
     )
     return markup
 
@@ -268,10 +276,13 @@ def get_reply_keyboard(user_is_admin=False):
 def send_welcome(message):
     chat_id = message.chat.id
     user_id = message.from_user.id
+    username = message.from_user.username or ""
     user_sessions[chat_id] = {}
 
     first_name = html.escape(message.from_user.first_name or "Гость")
-    user_is_admin = is_admin(user_id)
+    user_is_admin = is_admin(user_id=user_id, username=username)
+
+    logging.info(f"👋 /start by User: ID={user_id}, username=@{username}, name={first_name}, is_admin={user_is_admin}")
     
     text = (
         f"👋 Здравствуйте, <b>{first_name}</b>!\n\n"
@@ -285,7 +296,7 @@ def send_welcome(message):
     )
     
     if user_is_admin:
-        text += "👑 <b>Вы авторизованы как Администратор.</b>\nДля входа в CRM и аналитику нажмите кнопку ниже или введите команду /admin.\n\n"
+        text += "👑 <b>ВЫ АВТОРИЗОВАНЫ КАК АДМИНИСТРАТОР</b>\nВам доступны разделы CRM-системы, аналитики и базы заявок.\n\n"
 
     text += "Выберите действие ниже:"
     
@@ -296,6 +307,12 @@ def send_welcome(message):
             parse_mode="HTML",
             reply_markup=get_main_menu(user_is_admin)
         )
+        if user_is_admin:
+            bot.send_message(
+                chat_id,
+                "👑 Закрепленные кнопки управления администратора активированы внизу экрана:",
+                reply_markup=get_reply_keyboard(True)
+            )
     except Exception as e:
         logging.error(f"Error in send_welcome: {e}")
         bot.send_message(chat_id, "Добро пожаловать в Корпус М Мариуполь!", reply_markup=get_main_menu(user_is_admin))
@@ -305,7 +322,8 @@ def send_welcome(message):
 def admin_panel_command(message):
     """Специальная команда админ-панели (только для админов)"""
     user_id = message.from_user.id
-    if not is_admin(user_id):
+    username = message.from_user.username or ""
+    if not is_admin(user_id=user_id, username=username):
         bot.reply_to(
             message,
             "⛔ <b>Доступ ограничен</b>\n\n"
@@ -350,13 +368,14 @@ def admin_panel_command(message):
 def handle_menu_buttons(message):
     text = message.text
     user_id = message.from_user.id
+    username = message.from_user.username or ""
     chat_id = message.chat.id
 
     if text == "👑 Панель Администратора":
         admin_panel_command(message)
 
     elif text == "📊 Войти в CRM":
-        if not is_admin(user_id):
+        if not is_admin(user_id=user_id, username=username):
             bot.reply_to(message, "🔒 Доступ к CRM цеха разрешен только Администратору и Мастеру.", parse_mode="HTML")
             return
         markup = types.InlineKeyboardMarkup()
@@ -364,7 +383,7 @@ def handle_menu_buttons(message):
         bot.send_message(chat_id, "🔐 <b>CRM-система управления заказами KorpusM:</b>\n\nЛогин для входа: <code>admin</code> или <code>master</code>", parse_mode="HTML", reply_markup=markup)
 
     elif text == "📈 Войти в Аналитику":
-        if not is_admin(user_id):
+        if not is_admin(user_id=user_id, username=username):
             bot.reply_to(message, "🔒 Финансовая аналитика доступна только Владельцу (Администратору).", parse_mode="HTML")
             return
         markup = types.InlineKeyboardMarkup()
@@ -414,7 +433,9 @@ def handle_menu_buttons(message):
 def callback_handler(call):
     chat_id = call.message.chat.id
     user_id = call.from_user.id
-    user_is_admin = is_admin(user_id)
+    username = call.from_user.username or ""
+    user_is_admin = is_admin(user_id=user_id, username=username)
+
     if chat_id not in user_sessions:
         user_sessions[chat_id] = {}
 
