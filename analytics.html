@@ -337,7 +337,21 @@ function loadAnalytics() {
 
     calculateAndRender();
 
-    fetch('/api/crm/stats')
+    fetch('https://nabulvarerest.ru/api_korpusm_orders.php')
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+            if (data && data.orders && data.orders.length > 0) {
+                const map = new Map();
+                data.orders.forEach(o => { if (o && o.id) map.set(o.id, o); });
+                embeddedOrders.forEach(o => {
+                    const key = o.id || ('KM-' + o.number);
+                    if (!map.has(key)) map.set(key, o);
+                });
+                allOrders = Array.from(map.values());
+                allOrders.sort((a, b) => new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date));
+                calculateAndRender();
+            }
+        })
         .then(r => r.ok ? r.json() : null)
         .then(data => {
             if (data && data.success) {
