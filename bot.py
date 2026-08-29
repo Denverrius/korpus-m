@@ -20,15 +20,18 @@ import datetime
 import logging
 import requests
 
-# 1. PIN VERIFIED WORKING TELEGRAM GATEWAY (149.154.167.220)
+# 1. CLOUD-READY TELEGRAM NETWORK RESOLVER
 _orig_getaddrinfo = socket.getaddrinfo
 
 def _custom_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
-    if host == "api.telegram.org":
-        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("149.154.167.220", port))]
-    responses = _orig_getaddrinfo(host, port, family, type, proto, flags)
-    ipv4 = [r for r in responses if r[0] == socket.AF_INET]
-    return ipv4 if ipv4 else responses
+    try:
+        responses = _orig_getaddrinfo(host, port, family, type, proto, flags)
+        ipv4 = [r for r in responses if r[0] == socket.AF_INET]
+        return ipv4 if ipv4 else responses
+    except Exception:
+        if host == "api.telegram.org":
+            return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("149.154.167.220", port))]
+        raise
 
 socket.getaddrinfo = _custom_getaddrinfo
 
