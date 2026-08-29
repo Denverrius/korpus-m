@@ -231,7 +231,7 @@ def get_main_menu(user_is_admin=False):
     markup = types.InlineKeyboardMarkup(row_width=1)
     if user_is_admin:
         markup.add(
-            types.InlineKeyboardButton("👑 Панель Администратора (CRM & Аналитика)", callback_data="admin_menu"),
+            types.InlineKeyboardButton("👑 Панель Администратора", callback_data="admin_menu"),
             types.InlineKeyboardButton("📊 Вход в CRM-систему", url=WEBAPP_CRM_URL, web_app=types.WebAppInfo(url=WEBAPP_CRM_URL)),
             types.InlineKeyboardButton("📈 Вход в Аналитику", url=WEBAPP_ANALYTICS_URL, web_app=types.WebAppInfo(url=WEBAPP_ANALYTICS_URL))
         )
@@ -257,18 +257,8 @@ def get_admin_keyboard():
         types.InlineKeyboardButton("💰 Сводка по производству", callback_data="admin_stats_summary"),
         types.InlineKeyboardButton("📢 Канал уведомлений @saitypodkluch", url="https://t.me/saitypodkluch"),
         types.InlineKeyboardButton("🌐 Открыть сайт KorpusM", url=WEBAPP_SITE_URL, web_app=types.WebAppInfo(url=WEBAPP_SITE_URL)),
-        types.InlineKeyboardButton("◀ В главное меню", callback_data="main_menu")
+        types.InlineKeyboardButton("◀ Назад в главное меню", callback_data="main_menu")
     )
-    return markup
-
-
-def get_reply_keyboard(user_is_admin=False):
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
-    if user_is_admin:
-        markup.row(types.KeyboardButton("👑 Панель Администратора"))
-        markup.row(types.KeyboardButton("📊 Войти в CRM"), types.KeyboardButton("📈 Войти в Аналитику"))
-    markup.row(types.KeyboardButton("🪚 Рассчитать мебель"), types.KeyboardButton("📐 Записаться на замер"))
-    markup.row(types.KeyboardButton("📁 Портфолио цеха"), types.KeyboardButton("📞 Контакты мастера"))
     return markup
 
 
@@ -301,18 +291,16 @@ def send_welcome(message):
     text += "Выберите действие ниже:"
     
     try:
+        # Send message with inline keyboard and remove any legacy persistent reply keyboard
         bot.send_message(
             chat_id,
             text,
             parse_mode="HTML",
             reply_markup=get_main_menu(user_is_admin)
         )
-        if user_is_admin:
-            bot.send_message(
-                chat_id,
-                "👑 Закрепленные кнопки управления администратора активированы внизу экрана:",
-                reply_markup=get_reply_keyboard(True)
-            )
+        # Clear bottom reply keyboard cleanly
+        rm_markup = types.ReplyKeyboardRemove()
+        bot.send_message(chat_id, "Меню открыто выше ☝️", reply_markup=rm_markup)
     except Exception as e:
         logging.error(f"Error in send_welcome: {e}")
         bot.send_message(chat_id, "Добро пожаловать в Корпус М Мариуполь!", reply_markup=get_main_menu(user_is_admin))
@@ -359,74 +347,6 @@ def admin_panel_command(message):
     ).replace(",", " ")
 
     bot.send_message(message.chat.id, text, parse_mode="HTML", reply_markup=get_admin_keyboard())
-
-
-@bot.message_handler(func=lambda msg: msg.text in [
-    "👑 Панель Администратора", "📊 Войти в CRM", "📈 Войти в Аналитику",
-    "🪚 Рассчитать мебель", "📐 Записаться на замер", "📁 Портфолио цеха", "📞 Контакты мастера"
-])
-def handle_menu_buttons(message):
-    text = message.text
-    user_id = message.from_user.id
-    username = message.from_user.username or ""
-    chat_id = message.chat.id
-
-    if text == "👑 Панель Администратора":
-        admin_panel_command(message)
-
-    elif text == "📊 Войти в CRM":
-        if not is_admin(user_id=user_id, username=username):
-            bot.reply_to(message, "🔒 Доступ к CRM цеха разрешен только Администратору и Мастеру.", parse_mode="HTML")
-            return
-        markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("📊 Открыть CRM-систему", url=WEBAPP_CRM_URL, web_app=types.WebAppInfo(url=WEBAPP_CRM_URL)))
-        bot.send_message(chat_id, "🔐 <b>CRM-система управления заказами KorpusM:</b>\n\nЛогин для входа: <code>admin</code> или <code>master</code>", parse_mode="HTML", reply_markup=markup)
-
-    elif text == "📈 Войти в Аналитику":
-        if not is_admin(user_id=user_id, username=username):
-            bot.reply_to(message, "🔒 Финансовая аналитика доступна только Владельцу (Администратору).", parse_mode="HTML")
-            return
-        markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("📈 Открыть Аналитический дашборд", url=WEBAPP_ANALYTICS_URL, web_app=types.WebAppInfo(url=WEBAPP_ANALYTICS_URL)))
-        bot.send_message(chat_id, "📈 <b>Аналитика продаж, воронка и загрузка цеха KorpusM:</b>", parse_mode="HTML", reply_markup=markup)
-
-    elif text == "🪚 Рассчитать мебель":
-        markup = types.InlineKeyboardMarkup(row_width=1)
-        markup.add(
-            types.InlineKeyboardButton("🍳 Кухня на заказ", callback_data="calc_type_kitchen"),
-            types.InlineKeyboardButton("🚪 Шкаф-купе / Гардеробная", callback_data="calc_type_wardrobe"),
-            types.InlineKeyboardButton("🧥 Прихожая под потолок", callback_data="calc_type_hall"),
-            types.InlineKeyboardButton("☕ Мебель для бизнеса / Офис", callback_data="calc_type_commercial"),
-            types.InlineKeyboardButton("◀ Назад в меню", callback_data="main_menu")
-        )
-        bot.send_message(chat_id, "🪚 <b>Шаг 1 из 3:</b> Выберите тип мебели для расчета стоимости:", parse_mode="HTML", reply_markup=markup)
-
-    elif text == "📐 Записаться на замер":
-        markup = types.InlineKeyboardMarkup(row_width=1)
-        for dist in DISTRICTS:
-            markup.add(types.InlineKeyboardButton(f"📍 {dist}", callback_data=f"dist_{dist}"))
-        markup.add(types.InlineKeyboardButton("◀ В главное меню", callback_data="main_menu"))
-        bot.send_message(chat_id, "📐 <b>Бесплатный выезд мастера на замер по Мариуполю:</b>\n\nВ каком <b>районе Мариуполя</b> находится ваш объект?", parse_mode="HTML", reply_markup=markup)
-
-    elif text == "📁 Портфолио цеха":
-        markup = types.InlineKeyboardMarkup(row_width=1)
-        markup.add(
-            types.InlineKeyboardButton("🌐 Смотреть всё портфолио на сайте", url=WEBAPP_SITE_URL + "#portfolio", web_app=types.WebAppInfo(url=WEBAPP_SITE_URL + "#portfolio")),
-            types.InlineKeyboardButton("🪚 Рассчитать стоимость", callback_data="calc_start")
-        )
-        bot.send_message(chat_id, "📸 <b>Живое портфолио мебельного цеха «Корпус М» (Мариуполь):</b>\nБолее 480+ фото и видеообзоров на сайте!", parse_mode="HTML", reply_markup=markup)
-
-    elif text == "📞 Контакты мастера":
-        bot.send_message(
-            chat_id,
-            f"📞 <b>Контакты основателя и мастера Евгения Йулдашова:</b>\n\n"
-            f"• Телефон: <b>{PHONE_NUMBER}</b>\n"
-            "• Telegram: @Denver949\n"
-            "• Канал с отчётами: @korpus_m_admin_bot\n"
-            "• Цех: г. Мариуполь (работаем по всему городу и пригороду)\n\n"
-            "Пн–Сб с 9:00 до 19:00",
-            parse_mode="HTML"
-        )
 
 
 @bot.callback_query_handler(func=lambda call: True)
