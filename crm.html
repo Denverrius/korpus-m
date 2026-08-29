@@ -726,7 +726,27 @@ let currentUser = null;
 let selectedRole = 'admin';
 
 function initAuth() {
-    // Check saved session
+    // 1. Auto-authorize if launched via Telegram WebApp as admin
+    const tg = window.Telegram?.WebApp;
+    if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
+        const uid = tg.initDataUnsafe.user.id;
+        const uname = (tg.initDataUnsafe.user.username || '').toLowerCase().replace('@', '');
+        const adminNames = ['den_dev82', 'denver949', 'denver_test', 'illnass777', 'maksim_rest', 'den_dev', 'denver'];
+        const adminIds = [8086868178, 5889459074];
+        if (adminIds.includes(uid) || adminNames.includes(uname)) {
+            currentUser = {
+                username: 'admin',
+                name: tg.initDataUnsafe.user.first_name || ('Администратор @' + uname),
+                role: 'admin',
+                icon: '👑',
+                roleLabel: 'Владелец / Администратор',
+                loginTime: new Date().toISOString()
+            };
+            localStorage.setItem('korpusm_auth_user', JSON.stringify(currentUser));
+        }
+    }
+
+    // 2. Check saved session
     let saved = localStorage.getItem('korpusm_auth_user') || sessionStorage.getItem('korpusm_auth_user');
     if (saved) {
         try {
