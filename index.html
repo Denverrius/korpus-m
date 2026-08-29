@@ -1766,5 +1766,465 @@ function filterPortfolio(category, btn) {
 }
 </script>
 
+
+<!-- ========================================== -->
+<!-- KORPUS M • LIVE ONLINE CONSULTANT WIDGET   -->
+<!-- ========================================== -->
+<style>
+  /* Floating Trigger Button */
+  .chat-widget-fab {
+    position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+    display: flex; align-items: center; gap: 12px; cursor: pointer;
+    background: #1a1510; border: 1px solid var(--brass);
+    border-radius: 40px; padding: 8px 18px 8px 10px;
+    box-shadow: 0 10px 35px rgba(0,0,0,0.6), 0 0 25px rgba(200, 147, 90, 0.35);
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .chat-widget-fab:hover {
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 15px 40px rgba(0,0,0,0.8), 0 0 35px rgba(200, 147, 90, 0.5);
+  }
+  .chat-fab-avatar {
+    position: relative; width: 44px; height: 44px; border-radius: 50%;
+    background: var(--panel-light); border: 1.5px solid var(--brass);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--disp); font-size: 20px; color: var(--brass-soft);
+    box-shadow: 0 0 15px rgba(200,147,90,0.3);
+  }
+  .chat-online-dot {
+    position: absolute; bottom: 1px; right: 1px; width: 11px; height: 11px;
+    background: #52b788; border: 2px solid #1a1510; border-radius: 50%;
+    box-shadow: 0 0 8px #52b788; animation: pulseDot 2s infinite;
+  }
+  @keyframes pulseDot {
+    0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(82, 183, 136, 0.7); }
+    70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(82, 183, 136, 0); }
+    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(82, 183, 136, 0); }
+  }
+  .chat-fab-text { display: flex; flex-direction: column; text-align: left; }
+  .chat-fab-title { font-family: var(--body); font-weight: 700; font-size: 13px; color: #fff; line-height: 1.2; }
+  .chat-fab-sub { font-family: var(--mono); font-size: 10px; color: var(--brass-soft); letter-spacing: 0.05em; text-transform: uppercase; }
+
+  /* Notification Tooltip Bubble */
+  .chat-tooltip-bubble {
+    position: fixed; bottom: 85px; right: 24px; z-index: 9998;
+    background: #1e1912; border: 1px solid var(--brass); border-radius: 12px;
+    padding: 14px 18px; max-width: 280px; font-size: 13px; color: var(--cream);
+    box-shadow: 0 15px 35px rgba(0,0,0,0.7), 0 0 20px rgba(200,147,90,0.25);
+    animation: bubbleIn 0.3s ease-out; display: flex; align-items: flex-start; gap: 10px;
+  }
+  .chat-tooltip-close {
+    cursor: pointer; opacity: 0.5; font-size: 14px; margin-left: auto; transition: 0.2s;
+  }
+  .chat-tooltip-close:hover { opacity: 1; color: var(--brass); }
+
+  /* Chat Window Drawer */
+  .chat-drawer {
+    position: fixed; bottom: 24px; right: 24px; z-index: 10000;
+    width: 380px; max-width: calc(100vw - 32px); height: 580px; max-height: calc(100vh - 48px);
+    background: #18140f; border: 1px solid var(--brass); border-radius: 16px;
+    box-shadow: 0 25px 60px rgba(0,0,0,0.9), 0 0 40px rgba(200,147,90,0.3);
+    display: none; flex-direction: column; overflow: hidden;
+    animation: drawerIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @keyframes drawerIn {
+    from { opacity: 0; transform: translateY(20px) scale(0.96); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .chat-drawer-header {
+    background: #201a13; border-bottom: 1px solid var(--line2);
+    padding: 16px 18px; display: flex; align-items: center; justify-content: space-between;
+  }
+  .chat-header-info { display: flex; align-items: center; gap: 12px; }
+  .chat-header-title { font-family: var(--disp); font-size: 17px; color: #fff; line-height: 1.2; }
+  .chat-header-status { font-family: var(--mono); font-size: 10.5px; color: #52b788; display: flex; align-items: center; gap: 5px; }
+  .chat-header-close {
+    background: rgba(255,255,255,0.06); border: 1px solid var(--line2);
+    color: var(--muted); width: 30px; height: 30px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+    font-size: 14px; transition: 0.2s;
+  }
+  .chat-header-close:hover { background: var(--brass); color: #14110d; }
+
+  /* Message Stream */
+  .chat-messages {
+    flex: 1; padding: 16px; overflow-y: auto; display: flex;
+    flex-direction: column; gap: 12px; scrollbar-width: thin;
+  }
+  .chat-msg {
+    max-width: 85%; padding: 12px 14px; border-radius: 12px; font-size: 13px; line-height: 1.45;
+  }
+  .chat-msg-bot {
+    align-self: flex-start; background: #221c15; border: 1px solid var(--line2);
+    color: var(--cream); border-bottom-left-radius: 3px;
+  }
+  .chat-msg-user {
+    align-self: flex-end; background: var(--brass); color: #14110d;
+    font-weight: 600; border-bottom-right-radius: 3px;
+  }
+
+  /* Quick Actions in Chat */
+  .chat-actions-container {
+    display: flex; flex-direction: column; gap: 8px; margin-top: 6px;
+  }
+  .chat-btn-action {
+    background: #282119; border: 1px solid var(--line2); color: var(--cream);
+    padding: 9px 12px; border-radius: 8px; font-family: var(--body);
+    font-size: 12px; font-weight: 600; text-align: left; cursor: pointer;
+    transition: all 0.2s ease; display: flex; align-items: center; gap: 8px;
+  }
+  .chat-btn-action:hover {
+    border-color: var(--brass); background: rgba(200,147,90,0.15); color: #fff;
+    transform: translateX(3px);
+  }
+
+  /* Input Footer */
+  .chat-footer {
+    padding: 12px 14px; background: #1a1510; border-top: 1px solid var(--line2);
+    display: flex; gap: 8px; align-items: center;
+  }
+  .chat-input {
+    flex: 1; background: #14110d; border: 1px solid var(--line2);
+    border-radius: 24px; padding: 9px 16px; color: #fff; font-size: 13px; outline: none;
+    transition: border-color 0.2s;
+  }
+  .chat-input:focus { border-color: var(--brass); }
+  .chat-send-btn {
+    width: 38px; height: 38px; border-radius: 50%; background: var(--brass);
+    color: #14110d; border: none; display: flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 15px; transition: all 0.2s; flex-shrink: 0;
+  }
+  .chat-send-btn:hover { background: var(--brass-soft); transform: scale(1.05); }
+
+  /* Direct Call Banner in Chat */
+  .chat-call-banner {
+    background: rgba(42, 157, 143, 0.15); border: 1px solid #2a9d8f;
+    border-radius: 8px; padding: 10px 12px; display: flex;
+    align-items: center; justify-content: space-between; gap: 8px;
+  }
+  .chat-call-link {
+    font-family: var(--mono); font-weight: 700; font-size: 12.5px; color: #52b788;
+    text-decoration: none;
+  }
+</style>
+
+<!-- Floating FAB Trigger -->
+<div id="chatFab" class="chat-widget-fab" onclick="toggleChatDrawer()">
+  <div class="chat-fab-avatar">
+    <span>М</span>
+    <span class="chat-online-dot"></span>
+  </div>
+  <div class="chat-fab-text">
+    <span class="chat-fab-title">Мастер Евгений</span>
+    <span class="chat-fab-sub">Онлайн-расчет 24/7</span>
+  </div>
+</div>
+
+<!-- Auto Tooltip Bubble -->
+<div id="chatTooltip" class="chat-tooltip-bubble" style="display:none;">
+  <div style="font-size:18px;">🪵</div>
+  <div>
+    <strong>Консультация мастера:</strong><br>
+    Нужен точный расчет кухни или бесплатный замер с образцами в Мариуполе?
+  </div>
+  <span class="chat-tooltip-close" onclick="dismissTooltip(event)">✕</span>
+</div>
+
+<!-- Chat Window Drawer -->
+<div id="chatDrawer" class="chat-drawer">
+  <div class="chat-drawer-header">
+    <div class="chat-header-info">
+      <div class="chat-fab-avatar" style="width:36px; height:36px; font-size:16px;">
+        М
+        <span class="chat-online-dot" style="width:9px; height:9px;"></span>
+      </div>
+      <div>
+        <div class="chat-header-title">Корпус<span>М</span> • Мастер Евгений</div>
+        <div class="chat-header-status">● На связи в Мариуполе</div>
+      </div>
+    </div>
+    <div class="chat-header-close" onclick="toggleChatDrawer()">✕</div>
+  </div>
+
+  <div id="chatMessages" class="chat-messages">
+    <!-- Welcome message -->
+    <div class="chat-msg chat-msg-bot">
+      👋 Здравствуйте! Я мастер мебельного производства <strong>«Корпус М»</strong>.<br><br>
+      Чем могу вам помочь прямо сейчас?
+      <div class="chat-actions-container">
+        <button class="chat-btn-action" onclick="startChatCalculation()">
+          🪚 Рассчитать стоимость кухни / шкафа
+        </button>
+        <button class="chat-btn-action" onclick="startChatMeasurement()">
+          📐 Вызвать мастера на замер (бесплатно)
+        </button>
+        <button class="chat-btn-action" onclick="showChatPortfolio()">
+          📸 Посмотреть готовые объекты в Мариуполе
+        </button>
+        <button class="chat-btn-action" onclick="showChatPhone()">
+          📞 Прямой телефон мастера
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="chat-footer">
+    <input type="text" id="chatInput" class="chat-input" placeholder="Напишите вопрос или телефон..." onkeydown="handleChatKeyDown(event)">
+    <button class="chat-send-btn" onclick="sendUserMessage()">➤</button>
+  </div>
+</div>
+
+<script>
+  let chatOpen = false;
+  let chatStep = null;
+  let chatOrderData = { type: 'Кухня', length: '3', material: 'МДФ Эмаль + Blum', district: 'Центральный' };
+
+  // Show tooltip after 4 seconds if not opened
+  setTimeout(() => {
+    if (!chatOpen && !localStorage.getItem('km_tooltip_closed')) {
+      const tip = document.getElementById('chatTooltip');
+      if (tip) tip.style.display = 'flex';
+    }
+  }, 4000);
+
+  function dismissTooltip(e) {
+    if (e) e.stopPropagation();
+    document.getElementById('chatTooltip').style.display = 'none';
+    localStorage.setItem('km_tooltip_closed', '1');
+  }
+
+  function toggleChatDrawer() {
+    chatOpen = !chatOpen;
+    const drawer = document.getElementById('chatDrawer');
+    const fab = document.getElementById('chatFab');
+    const tip = document.getElementById('chatTooltip');
+    
+    if (tip) tip.style.display = 'none';
+
+    if (chatOpen) {
+      drawer.style.display = 'flex';
+      fab.style.display = 'none';
+      document.getElementById('chatInput').focus();
+    } else {
+      drawer.style.display = 'none';
+      fab.style.display = 'flex';
+    }
+  }
+
+  function addBotMessage(htmlContent) {
+    const box = document.getElementById('chatMessages');
+    const msg = document.createElement('div');
+    msg.className = 'chat-msg chat-msg-bot';
+    msg.innerHTML = htmlContent;
+    box.appendChild(msg);
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function addUserMessage(text) {
+    const box = document.getElementById('chatMessages');
+    const msg = document.createElement('div');
+    msg.className = 'chat-msg chat-msg-user';
+    msg.innerText = text;
+    box.appendChild(msg);
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function handleChatKeyDown(e) {
+    if (e.key === 'Enter') {
+      sendUserMessage();
+    }
+  }
+
+  function sendUserMessage() {
+    const input = document.getElementById('chatInput');
+    const text = input.value.trim();
+    if (!text) return;
+
+    addUserMessage(text);
+    input.value = '';
+
+    // Handle interactive quiz flow or AI FAQ
+    setTimeout(() => {
+      processUserText(text);
+    }, 600);
+  }
+
+  function processUserText(text) {
+    const lower = text.toLowerCase();
+
+    // Check if user entered a phone number
+    const phoneMatch = text.match(/(?:\+7|8)[\s\-]?\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}/);
+    if (phoneMatch || (text.replace(/\D/g, '').length >= 10 && (text.includes('949') || text.includes('7') || text.includes('8')))) {
+      submitChatLead(text);
+      return;
+    }
+
+    if (lower.includes('замер') || lower.includes('выезд') || lower.includes('мастер')) {
+      startChatMeasurement();
+    } else if (lower.includes('цена') || lower.includes('стоим') || lower.includes('расчет') || lower.includes('сколько')) {
+      startChatCalculation();
+    } else if (lower.includes('срок') || lower.includes('когда') || lower.includes('дней')) {
+      addBotMessage('⏱️ **Сроки изготовления мебели:**\n\n• Стандартные кухни и шкафы: **от 14 до 21 рабочего дня**.\n• Сложные проекты с эмалью по RAL: **до 30 дней**.\n• Монтаж под ключ бригадой цеха за 1 день!');
+    } else if (lower.includes('материал') || lower.includes('blum') || lower.includes('egger') || lower.includes('фасад')) {
+      addBotMessage('🔩 **Материалы нашего производства:**\n\n• Австрийское ЛДСП **Egger** (экологичное, класс E1)\n• Фурнитура премиум-класса **Blum** (Австрия) с плавными доводчиками\n• Фасады: МДФ Эмаль, Шпон ясеня/дуба, Матовое стекло в черном профиле\n• Столешницы: Влагостойкий HPL и Кварцевый агломерат.');
+    } else if (lower.includes('портфолио') || lower.includes('фото') || lower.includes('работы')) {
+      showChatPortfolio();
+    } else {
+      addBotMessage('Спасибо за обращение! Чтобы я рассчитал точную смету или записал вас на бесплатный замер, **укажите ваш номер телефона** (+7 949 ...), и мастер перезвонит вам в течение 5 минут:');
+    }
+  }
+
+  function startChatCalculation() {
+    chatStep = 'calc_type';
+    addBotMessage(`
+      🪚 <strong>Шаг 1 из 3:</strong> Какую мебель вы планируете заказать?
+      <div class="chat-actions-container">
+        <button class="chat-btn-action" onclick="chooseType('Кухня на заказ')">🍳 Кухня на заказ</button>
+        <button class="chat-btn-action" onclick="chooseType('Шкаф-купе / Гардеробная')">🚪 Шкаф-купе / Гардеробная</button>
+        <button class="chat-btn-action" onclick="chooseType('Прихожая под потолок')">🧥 Прихожая под потолок</button>
+        <button class="chat-btn-action" onclick="chooseType('Мебель для бизнеса / Кафе')">☕ Мебель для бизнеса / Офис</button>
+      </div>
+    `);
+  }
+
+  function chooseType(type) {
+    chatOrderData.type = type;
+    addUserMessage(type);
+    chatStep = 'calc_len';
+    setTimeout(() => {
+      addBotMessage(`
+        📏 <strong>Шаг 2 из 3:</strong> Укажите примерную длину мебели:
+        <div class="chat-actions-container">
+          <button class="chat-btn-action" onclick="chooseLength('2.2 метра')">2.0 – 2.4 метра (компактная)</button>
+          <button class="chat-btn-action" onclick="chooseLength('3.0 метра')">2.8 – 3.2 метра (стандартная)</button>
+          <button class="chat-btn-action" onclick="chooseLength('3.8 метра')">3.6 – 4.2 метра (большая угловая)</button>
+        </div>
+      `);
+    }, 400);
+  }
+
+  function chooseLength(len) {
+    chatOrderData.length = len;
+    addUserMessage(len);
+    chatStep = 'calc_mat';
+    setTimeout(() => {
+      addBotMessage(`
+        🔩 <strong>Шаг 3 из 3:</strong> Какой класс материалов рассматриваете?
+        <div class="chat-actions-container">
+          <button class="chat-btn-action" onclick="chooseMaterial('ЛДСП Egger + фурнитура с доводчиками')">✦ Egger + Доводчики (Практичный)</button>
+          <button class="chat-btn-action" onclick="chooseMaterial('МДФ Эмаль Soft-Touch + Blum Австрия')">✦ МДФ Эмаль + Blum (Премиум)</button>
+          <button class="chat-btn-action" onclick="chooseMaterial('Стекло в черном профиле + Кварц')">✦ Шпон / Кварц / Стекло (Люкс)</button>
+        </div>
+      `);
+    }, 400);
+  }
+
+  function chooseMaterial(mat) {
+    chatOrderData.material = mat;
+    addUserMessage(mat);
+    
+    let basePrice = 145000;
+    if (chatOrderData.length.includes('3.0')) basePrice = 185000;
+    if (chatOrderData.length.includes('3.8')) basePrice = 245000;
+    if (mat.includes('МДФ')) basePrice = Math.round(basePrice * 1.35);
+    if (mat.includes('Шпон')) basePrice = Math.round(basePrice * 1.6);
+    chatOrderData.amount = basePrice;
+
+    setTimeout(() => {
+      addBotMessage(`
+        💰 <strong>Ориентировочная стоимость: ~ ${basePrice.toLocaleString('ru-RU')} ₽</strong><br><br>
+        В стоимость включено:<br>
+        ✓ Индивидуальный 3D-проект<br>
+        ✓ Раскрой, кромление PUR-клеем и присадка на ЧПУ<br>
+        ✓ Доставка и монтаж в Мариуполе<br><br>
+        Введите <strong>ваш номер телефона</strong>, чтобы зафиксировать скидку 10% на материалы и записаться на замер:
+      `);
+    }, 500);
+  }
+
+  function startChatMeasurement() {
+    addBotMessage(`
+      📐 <strong>Бесплатный выезд замерщика по Мариуполю:</strong><br>
+      Мастер приедет с чемоданом образцов (Egger, МДФ, кварц, фурнитура Blum), выполнит лазерный замер помещения и построит 3D-модель.<br><br>
+      В каком районе Мариуполя находится объект?
+      <div class="chat-actions-container">
+        <button class="chat-btn-action" onclick="chooseDistrict('Центральный район')">📍 Центральный район</button>
+        <button class="chat-btn-action" onclick="chooseDistrict('Приморский район')">📍 Приморский район</button>
+        <button class="chat-btn-action" onclick="chooseDistrict('Ильичевский район')">📍 Ильичевский район</button>
+        <button class="chat-btn-action" onclick="chooseDistrict('Левобережный район')">📍 Левобережный район</button>
+      </div>
+    `);
+  }
+
+  function chooseDistrict(dist) {
+    chatOrderData.district = dist;
+    addUserMessage(dist);
+    setTimeout(() => {
+      addBotMessage(`
+        Отлично! Замер в районе <strong>${dist}</strong> возможен на этой неделе.<br><br>
+        Напишите ваш <strong>номер телефона и имя</strong> для связи:
+      `);
+    }, 400);
+  }
+
+  function showChatPortfolio() {
+    addBotMessage(`
+      📸 <strong>Наши сданные объекты в Мариуполе:</strong><br><br>
+      • Кухня Графит & Дуб (пр. Металлургов) — 210 000 ₽<br>
+      • Белый мат Soft-Touch & LED (пр. Мира) — 185 000 ₽<br>
+      • Встроенная прихожая под потолок (ул. Нахимова) — 95 000 ₽<br>
+      • Зеркальный шкаф-купе в нишу (бульвар Шевченко) — 75 000 ₽<br><br>
+      👉 Все фотографии высокого разрешения можно посмотреть в разделе <a href="#portfolio" style="color:var(--brass); text-decoration:underline;">Портфолио на сайте</a>!
+    `);
+  }
+
+  function showChatPhone() {
+    addBotMessage(`
+      <div class="chat-call-banner">
+        <div>
+          <div style="font-size:11px; color:var(--muted); text-transform:uppercase;">Мастер цеха:</div>
+          <a href="tel:+79497105278" class="chat-call-link">📞 +7 (949) 710-52-78</a>
+        </div>
+      </div>
+    `);
+  }
+
+  async function submitChatLead(phoneOrText) {
+    const rawDigits = phoneOrText.replace(/\D/g, '');
+    const cleanPhone = phoneOrText.trim();
+    const orderId = 'KM-' + Math.floor(1000 + Math.random() * 900);
+
+    try {
+      await fetch('/api/lead', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'Клиент с онлайн-консультанта',
+          phone: cleanPhone,
+          address: 'г. Мариуполь (' + (chatOrderData.district || 'Центральный') + ')',
+          type: chatOrderData.type || 'Кухня на заказ',
+          material: chatOrderData.material || 'ЛДСП Egger + Blum',
+          amount: chatOrderData.amount || 165000,
+          source: 'Онлайн-консультант на сайте',
+          comment: 'Заявка из веб-виджета. Район: ' + (chatOrderData.district || 'Мариуполь')
+        })
+      });
+    } catch(e) {}
+
+    addBotMessage(`
+      ✅ <strong>Спасибо! Ваша заявка №${orderId} успешно принята в производство!</strong><br><br>
+      Мастер Евгений свяжется с вами по номеру <code>${cleanPhone}</code> в течение 5 минут для согласования точного времени замера.<br><br>
+      <div class="chat-call-banner">
+        <div>
+          <div style="font-size:11px; color:var(--muted);">Прямой звонок мастеру:</div>
+          <a href="tel:+79497105278" class="chat-call-link">📞 +7 (949) 710-52-78</a>
+        </div>
+      </div>
+    `);
+  }
+</script>
+<!-- ========================================== -->
+
 </body>
 </html>
